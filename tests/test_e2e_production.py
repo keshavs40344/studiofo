@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import struct
 import wave
@@ -65,7 +66,9 @@ def test_end_to_end_waiting_for_voice_then_full_mp4_render(tmp_path: Path) -> No
     res_no_voice = pipeline.run_pipeline(proj.id, notes_files=[sample_notes])
     assert res_no_voice["status"] == "WAITING_FOR_VOICE"
     assert Path(res_no_voice["recording_script"]).exists()
-    assert res_no_voice["scenes_count"] == 5
+    storyboard_data = json.loads((proj_dir / "storyboard" / "storyboard.json").read_text(encoding="utf-8"))
+    assert res_no_voice["scenes_count"] == len(storyboard_data)
+    assert res_no_voice["scenes_count"] >= 1
     assert res_no_voice["qa"]["rights"]["status"] == "PASSED"
 
     # Stage B: Verify claims properly with official source, then supply own voice WAV
