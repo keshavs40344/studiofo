@@ -70,7 +70,7 @@ def test_transient_failure_retries_with_bounded_attempts():
             raise TimeoutError("temporary")
         return {"ok": True}
     result = DependencyScheduler(store, {"flaky": flaky}).run(
-        "wf-retry", [TaskSpec("a", "A", "flaky", max_retries=2)]
+        "wf-retry", [TaskSpec("a", "A", "flaky", max_retries=2, retry_safe=True)]
     )
     assert result["status"] == "COMPLETED"
     assert calls["n"] == 2
@@ -97,3 +97,43 @@ def test_downstream_agent_receives_dependency_output():
     ])
     assert result["status"] == "COMPLETED"
     assert result["tasks"][1]["output_json"] == '{"used_facts": ["fact-a"]}'
+
+
+
+def test_interrupted_running_task_is_quarantined_not_replayed():
+    _, store = make_runtime()
+    task_id = store.enqueue("wf-crash", TaskSpec("a", "A", "side_effect"))
+    store.transition(task_id, "RUNNING")
+    calls = {"n": 0}
+    scheduler = DependencyScheduler(store, {"side_effect": lambda p: calls.__setitem__("n", calls["n"] + 1)})
+    result = scheduler.run("wf-crash", [TaskSpec("a", "A", "side_effect")])
+    assert result["status"] == "REVIEW_REQUIRED"
+    assert result["review_required"] == 1
+    assert calls["n"] == 0
+    assert store.get(task_id)["status"] == "REVIEW_REQUIRED"
+
+
+def test_retry_wait_is_not_replayed_without_retry_safe_contract():
+    _, store = make_runtime()
+    task_id = store.enqueue("wf-retry-crash", TaskSpec("a", "A", "side_effect"))
+    store.transition(task_id, "RUNNING")
+    store.transition(task_id, "RETRY_WAIT", error="timeout")
+    calls = {"n": 0}
+    scheduler = DependencyScheduler(store, {"side_effect": lambda p: calls.__setitem__("n", calls["n"] + 1)})
+    result = scheduler.run("wf-retry-crash", [TaskSpec("a", "A", "side_effect")])
+    assert result["status"] == "REVIEW_REQUIRED"
+    assert calls["n"] == 0
+
+
+def test_idempotency_key_changes_when_task_semantics_change():
+    _, store = make_runtime()
+    first = store.enqueue("wf-semantic", TaskSpec("a", "A", "work", depends_on=(), required=True))
+    second = store.enqueue("wf-semantic", TaskSpec("a", "A", "work", depends_on=(), required=False))
+    assert first != second
+
+
+def test_empty_workflow_completes_without_handlers():
+    _, store = make_runtime()
+    result = DependencyScheduler(store, {}).run("wf-empty", [])
+    assert result["status"] == "COMPLETED"
+    assert result["task_count"] == 0
