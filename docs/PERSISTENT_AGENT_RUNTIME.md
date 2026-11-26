@@ -1,18 +1,24 @@
 # Persistent Agent Runtime
 
-This module adds a real SQLite-backed task queue and deterministic DAG runner.
+This module provides a SQLite-backed task queue and deterministic dependency-graph scheduler.
 
-## Capabilities
+## Implemented
 - Persistent task rows and append-only event history.
-- Idempotent enqueue keyed by workflow, task, handler, payload and caller input fingerprint.
+- Idempotency keys include workflow/task identity, agent and handler, input fingerprint, payload, dependency list, required flag, retry limit and retry-safety declaration.
 - Dependency validation, cycle detection and downstream blocking.
-- Explicit task state transitions and bounded retries for `TimeoutError` / `ConnectionError` only.
-- Workflow checkpoints for resumable stage metadata.
-- Import diagnostics for registry targets, including duplicate module targets.
-- Sequential execution by default to avoid overloading CPU-only machines.
+- Worker-level FAILED, BLOCKED, REVIEW_REQUIRED and SKIPPED results propagate to scheduler task states.
+- Crash-interrupted RUNNING tasks are quarantined as REVIEW_REQUIRED; the runtime does not replay possible side effects automatically.
+- Transient retries are allowed only when a TaskSpec explicitly declares retry_safe=true.
+- A persisted RETRY_WAIT task is not resumed after restart unless the current TaskSpec declares retry_safe=true.
+- Workflow checkpoints and import diagnostics for registry targets.
+- Sequential execution by default for CPU-limited local machines.
+- create_default_scheduler(conn) wires the deterministic audit workers into the runtime.
 
 ## Integration contract
-The application must explicitly provide handler callables to `DependencyScheduler`. This module does not dynamically execute arbitrary registry entries, downloaded code, shell commands or user-provided strings. Handlers receive a dictionary payload and return JSON-serializable output.
+The application must explicitly provide handler callables to DependencyScheduler or use create_default_scheduler. Handlers receive a dictionary payload and should return JSON-serializable output. Handlers with external side effects must not be marked retry_safe unless they implement idempotency or reconciliation.
 
-## Important limits
-This is a reusable runtime component, not yet wired into the existing ChapterPipeline or dashboard. The registry diagnostic reports importability and duplicate targets; it does not certify semantic correctness of an agent. A workflow is only operational when the app registers tested handlers and invokes the scheduler.
+## Safety and limitations
+This runtime is not yet integrated into the existing ChapterPipeline or dashboard. It does not automatically fetch research, generate scripts, render media or upload content. Registry importability is not proof of agent quality. A workflow is operational only when the application invokes it with tested handlers and real project data.
+
+## Recovery
+A task found RUNNING after a process restart is moved to REVIEW_REQUIRED. An operator must inspect logs and external side effects before deciding how to resume it. The runtime intentionally does not offer blind automatic replay.
