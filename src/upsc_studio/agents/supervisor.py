@@ -48,7 +48,7 @@ class ExecutiveProducer:
                         status="COMPLETED",
                         execution_time_sec=round(time.perf_counter() - t0, 3),
                         retry_count=attempt,
-                        verification_status="VERIFIED",
+                        verification_status="PENDING_INDEPENDENT_REVIEW",
                     ),
                     out,
                 )
