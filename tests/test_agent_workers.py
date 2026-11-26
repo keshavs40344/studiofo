@@ -1,5 +1,5 @@
 from upsc_studio.agents.workers import (
-    coverage_audit, evidence_completeness_audit, release_gate,
+    build_quality_review_tasks, coverage_audit, evidence_completeness_audit, release_gate,
     rights_asset_audit, topic_profile,
 )
 
@@ -38,3 +38,44 @@ def test_release_gate_never_authorizes_public_upload():
                            "human_release_approval": True})
     assert result["status"] == "RELEASE_READY"
     assert result["public_upload_authorized"] is False
+
+
+
+def test_quality_workflow_reaches_release_ready_only_after_all_audits_and_approval():
+    import sqlite3
+    from upsc_studio.agents.runtime import AgentTaskStore, DependencyScheduler
+    from upsc_studio.agents.workers import default_worker_handlers
+
+    conn = sqlite3.connect(":memory:")
+    scheduler = DependencyScheduler(AgentTaskStore(conn), default_worker_handlers())
+    specs = build_quality_review_tasks(
+        {"category": "general_knowledge"},
+        {"required_concepts": ["photosynthesis"], "script_text": "Photosynthesis converts light energy."},
+        {"claims": [{"text": "Photosynthesis uses light", "source_refs": ["SRC-1"], "source_date": "2026-01-01"}]},
+        {"assets": [{"asset_ref": "ASSET-1", "source_url": "https://example.org/a",
+                     "rights_status": "LICENSED"}]},
+        human_release_approval=True,
+    )
+    result = scheduler.run("quality-approved", specs)
+    assert result["status"] == "COMPLETED"
+    assert result["completed"] == 5
+    assert result["tasks"][-1]["output_json"] == '{"failed_gates": [], "note": "Release readiness never triggers upload; public publishing remains a separate explicit action.", "public_upload_authorized": false, "status": "RELEASE_READY"}'
+
+
+def test_quality_workflow_cannot_release_without_human_approval():
+    import sqlite3
+    from upsc_studio.agents.runtime import AgentTaskStore, DependencyScheduler
+    from upsc_studio.agents.workers import default_worker_handlers
+
+    conn = sqlite3.connect(":memory:")
+    scheduler = DependencyScheduler(AgentTaskStore(conn), default_worker_handlers())
+    specs = build_quality_review_tasks(
+        {"category": "general_knowledge"},
+        {"required_concepts": ["gravity"], "script_text": "Gravity attracts masses."},
+        {"claims": []},
+        {"assets": []},
+        human_release_approval=False,
+    )
+    result = scheduler.run("quality-no-approval", specs)
+    assert result["status"] == "BLOCKED"
+    assert result["blocked"] == 1
