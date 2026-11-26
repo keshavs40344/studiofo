@@ -144,7 +144,7 @@ class AgentTaskStore:
         allowed = {
             "PENDING": {"RUNNING", "BLOCKED", "SKIPPED"},
             "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED", "REVIEW_REQUIRED"},
-            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED", "REVIEW_REQUIRED"},
+            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED", "BLOCKED", "SKIPPED", "REVIEW_REQUIRED"},
         }
         row = self.get(task_id)
         if row is None:
