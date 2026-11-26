@@ -143,9 +143,8 @@ class AgentTaskStore:
     def transition(self, task_id: str, status: str, *, output: Any = None, error: str | None = None) -> None:
         allowed = {
             "PENDING": {"RUNNING", "BLOCKED", "SKIPPED"},
-            "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED"},
-            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED", "REVIEW_REQUIRED"},
             "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED", "REVIEW_REQUIRED"},
+            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED", "REVIEW_REQUIRED"},
         }
         row = self.get(task_id)
         if row is None:
@@ -222,7 +221,8 @@ def inspect_agent_registry(registry: Iterable[Mapping[str, Any]]) -> dict:
         "failed_entries": [r for r in results if not r["importable"]],
         "duplicate_implementation_targets": duplicates,
         "entries": results,
-        "independent_agent_count": len(seen) - len(duplicates),
+        "unique_implementation_target_count": len([target for target in seen if target]),
+        "duplicate_registry_entry_count": sum(len(ids) - 1 for ids in duplicates.values()),
     }
 
 
