@@ -16,7 +16,7 @@ class AgentTaskResult(BaseModel):
     execution_time_sec: float = 0.0
     errors: list[str] = Field(default_factory=list)
     retry_count: int = 0
-    verification_status: str = "VERIFIED"
+    verification_status: str = "PENDING_INDEPENDENT_REVIEW"
     next_dependency: Optional[str] = None
 
 
