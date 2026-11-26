@@ -72,6 +72,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <span id="w-status" class="badge"></span>
           <button class="secondary" onclick="backupCurrent()">Create Backup ZIP</button>
           <button onclick="approveCurrent()">Record Final Human Approval</button>
+          <button class="secondary" onclick="buildDubPack()">Generate 16-Language Dub Pack</button>
+          <button onclick="openYouTubeStudio()">Open YouTube Studio — Add Language Tracks</button>
         </div>
         <div class="card" style="background:#0f172a;">
           <h3>Run Automated Production Pipeline</h3>
@@ -174,6 +176,18 @@ async function approveCurrent() {
   const data = await res.json();
   if (!res.ok) { alert('Cannot approve: ' + data.detail); return; }
   await openProject(currentProjectId);
+}
+
+async function buildDubPack() {
+  if (!currentProjectId) return;
+  document.getElementById('w-output').textContent = 'Generating 16-language dub pack... please wait.';
+  const res = await fetch(`/api/projects/${currentProjectId}/dub_pack`, { method: 'POST' });
+  const data = await res.json();
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+function openYouTubeStudio() {
+  window.open('https://studio.youtube.com', '_blank');
 }
 
 loadHardware();
@@ -285,5 +299,38 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         if not mp4.exists():
             raise HTTPException(status_code=404, detail="Final video not rendered yet.")
         return FileResponse(mp4, media_type="video/mp4", filename=f"{proj.slug}.mp4")
+
+    @app.get("/api/languages")
+    def get_languages() -> dict:
+        from upsc_studio.languages.registry import LanguageRegistry
+        reg = LanguageRegistry()
+        return {
+            "core_16": [lp.model_dump() for lp in reg.list_core_16()],
+            "all_supported": [lp.model_dump() for lp in reg.list_all()],
+        }
+
+    @app.post("/api/projects/{project_id}/dub_pack")
+    def create_project_dub_pack(project_id: str) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        proj_dir = Path(proj.root_dir)
+        sections_file = proj_dir / "teaching" / "sections.json"
+        if not sections_file.exists():
+            raise HTTPException(status_code=400, detail="Teaching sections not found. Run pipeline first.")
+
+        sections = json.loads(sections_file.read_text(encoding="utf-8"))
+        from upsc_studio.publishing.dub_pack import YouTubeDubPackBuilder
+        from upsc_studio.languages.registry import CORE_16_LANGUAGES
+
+        builder = YouTubeDubPackBuilder(proj_dir)
+        return builder.build_dub_pack(
+            chapter_title=proj.chapter_title,
+            canonical_script_segments=sections,
+            target_languages=list(CORE_16_LANGUAGES.keys()),
+            primary_video_path=proj_dir / "render" / "final" / "final_video.mp4",
+        )
 
     return app
