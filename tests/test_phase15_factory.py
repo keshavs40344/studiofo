@@ -29,7 +29,7 @@ def test_agent_registry_and_retry_recovery(tmp_path: Path) -> None:
     def flaky() -> dict:
         attempts["count"] += 1
         if attempts["count"] == 1:
-            raise RuntimeError("Transient network timeout")
+            raise TimeoutError("Transient network timeout")
         return {"output": "ok"}
 
     res, out = sup.run_with_retry("AGENT_03", flaky, input_refs=["doc_1"], max_retries=2)
@@ -105,4 +105,10 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     assert Path(out["render_manifest"]["final_video"]).exists()
     assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
     assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
-    assert out["youtube_publish"]["status"] == "PENDING_OAUTH_CONNECTION"
+    assert out["workflow"]["status"] == "COMPLETED"
+    assert out["workflow"]["task_count"] == 4
+    assert out["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
+    assert out["agent_states"]["AGENT_20"]["status"] == "COMPLETED"
+    assert out["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
+    assert out["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
+    assert out["youtube_publish"]["status"] == "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL"
