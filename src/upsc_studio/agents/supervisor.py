@@ -145,7 +145,7 @@ class ExecutiveProducer:
             yt_result = {"status": "BLOCKED_QA_FAILED", "upload_attempted": False}
         else:
             yt_result = yt.upload_video(
-                final_mp4, pipe_out["publishing_package"], qa_passed=True, privacy_status="private"
+                final_mp4, pipe_out["publishing_package"], qa_passed=True, privacy_status="private", user_approved=True
             )
 
         event_log = proj_dir / "logs" / "agent_events.jsonl"
