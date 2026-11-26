@@ -83,3 +83,17 @@ def test_checkpoint_round_trip_and_event_log():
     task = store.enqueue("wf", TaskSpec("a", "A", "noop"))
     assert [e["event_type"] for e in store.events("wf")] == ["ENQUEUED"]
     assert store.get(task)["status"] == "PENDING"
+
+
+def test_downstream_agent_receives_dependency_output():
+    _, store = make_runtime()
+    scheduler = DependencyScheduler(store, {
+        "research": lambda p: {"facts": ["fact-a"]},
+        "writer": lambda p: {"used_facts": p["_dependency_outputs"]["research"]["facts"]},
+    })
+    result = scheduler.run("wf-deps", [
+        TaskSpec("research", "RESEARCH", "research"),
+        TaskSpec("writer", "WRITER", "writer", ("research",)),
+    ])
+    assert result["status"] == "COMPLETED"
+    assert result["tasks"][1]["output_json"] == '{"used_facts": ["fact-a"]}'
