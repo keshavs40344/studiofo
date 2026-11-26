@@ -301,7 +301,10 @@ class DependencyScheduler:
                         payload["_task_id"] = task_id
                         payload["_dependency_outputs"] = {dep: json.loads(self.store.get(ids[dep])["output_json"] or "{}") for dep in spec.depends_on}
                         output = self.handlers[spec.handler](payload)
-                        self.store.transition(task_id, "COMPLETED", output=output)
+                        business_status = output.get("status") if isinstance(output, Mapping) else None
+                        task_status = business_status if business_status in {"FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"} else "COMPLETED"
+                        task_error = output.get("error") if task_status != "COMPLETED" and isinstance(output, Mapping) else None
+                        self.store.transition(task_id, task_status, output=output, error=task_error)
                         progress = True
                         break
                     except Exception as exc:
