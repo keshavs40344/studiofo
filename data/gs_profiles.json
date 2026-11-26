@@ -1,0 +1,109 @@
+{
+  "version": "2026.1",
+  "profiles": {
+    "GS-I": {
+      "label": "Mains GS Paper I (Heritage, History, Society, Geography)",
+      "syllabus_focus": ["Art & Architecture", "Modern Indian History", "World History", "Indian Society", "Physical & Human Geography"],
+      "prerequisites": ["Chronological awareness", "Basic physical geography concepts", "Social structure fundamentals"],
+      "concept_hierarchy": ["Historical/Geographical Context", "Causation & Evolution", "Regional/Social Variations", "Continuity & Change", "Contemporary Significance"],
+      "key_terminology": ["Syncretism", "Colonialism", "Demographic Dividend", "Monsoon Mechanism", "Geophysical Phenomena"],
+      "teaching_methods": ["Chronological storytelling with causal links", "Spatial map-based explanation", "Comparative civilizational analysis"],
+      "examples": ["Bhakti-Sufi synthesis", "1857 Revolt causes & consequences", "ITCZ shift in Indian Monsoon"],
+      "adaptive_visual_methods": ["Historical Timelines", "Archival Document Excerpts", "Physical & Historical Maps"],
+      "prelims_dimensions": ["Chronology", "Personalities & Literary Works", "Sites, Rivers, Passes & Soils"],
+      "mains_dimensions": ["Multi-causal historical analysis", "Social impact & regional diversity", "Geographical determinism vs human adaptation"],
+      "assessment_methods": ["Chronology & site MCQs", "150/250-word analytical Mains answers with map/timeline"]
+    },
+    "GS-II": {
+      "label": "Mains GS Paper II (Constitution, Polity, Governance, Social Justice, IR)",
+      "syllabus_focus": ["Indian Constitution", "Parliament & Judiciary", "Federalism", "Governance & Welfare", "International Relations"],
+      "prerequisites": ["Separation of powers", "Rule of law", "Federal vs Unitary features", "Sovereignty & National Interest"],
+      "concept_hierarchy": ["Constitutional/Statutory Basis", "Institutional Architecture", "Operational Mechanism", "Judicial Interpretation", "Challenges & Reforms"],
+      "key_terminology": ["Basic Structure", "Judicial Review", "Cooperative Federalism", "Accountability", "Strategic Autonomy"],
+      "teaching_methods": ["Article-by-Article institutional walkthrough", "Landmark Supreme Court case-study method", "Stakeholder & checks-and-balances analysis"],
+      "examples": ["Kesavananda Bharati (1973)", "Kihoto Hollohan (1992)", "GST Council cooperative federalism"],
+      "adaptive_visual_methods": ["Constitutional Flowcharts", "Institutional Hierarchy Diagrams", "Jurisdictional & Geopolitical Maps"],
+      "prelims_dimensions": ["Exact Articles & Schedules", "Constitutional vs Statutory Bodies", "Parliamentary Procedures & Majorities"],
+      "mains_dimensions": ["Constitutional morality vs political expediency", "Federal balance", "Bilateral/multilateral strategic calculus"],
+      "assessment_methods": ["Statement-based Constitutional MCQs", "250-word critical/evaluative Mains answers"]
+    },
+    "GS-III": {
+      "label": "Mains GS Paper III (Economy, Agriculture, S&T, Environment, Security)",
+      "syllabus_focus": ["Macroeconomics & Budgeting", "Agriculture & Food Security", "Science & Tech", "Biodiversity & Climate", "Internal Security"],
+      "prerequisites": ["Supply-demand & monetary transmission", "Ecosystem energy flow", "Basic scientific method"],
+      "concept_hierarchy": ["Core Mechanism/Indicator", "Policy & Institutional Framework", "Empirical Data & Trends", "Bottlenecks & Trade-offs", "Sustainable Reforms"],
+      "key_terminology": ["Repo Rate", "CPI Inflation", "MSP & PDS", "Biodiversity Hotspot", "Cyber Resilience"],
+      "teaching_methods": ["Cause-effect mechanism chains", "Source-cited data chart interpretation", "Policy trade-off analysis"],
+      "examples": ["RBI MPC 4% +/- 2% inflation target", "FCI buffer stock & NFSA", "Western Ghats biodiversity conservation"],
+      "adaptive_visual_methods": ["Data Charts & Time-Series", "Economic Mechanism Flowcharts", "Ecosystem & Threat Diagrams"],
+      "prelims_dimensions": ["Economic definitions & RBI tools", "Species/Protected Areas/Conventions", "Tech applications"],
+      "mains_dimensions": ["Growth vs stability trade-offs", "Environmental sustainability vs development", "Security-development nexus"],
+      "assessment_methods": ["Conceptual & data-interpretation MCQs", "Data-backed Mains policy answers"]
+    },
+    "GS-IV": {
+      "label": "Mains GS Paper IV (Ethics, Integrity, Aptitude & Case Studies)",
+      "syllabus_focus": ["Human Values", "Attitude & Emotional Intelligence", "Public Service Values", "Probity in Governance", "Ethical Case Studies"],
+      "prerequisites": ["Distinction between law, rules, and ethics", "Public vs private interest"],
+      "concept_hierarchy": ["Core Ethical Value", "Theoretical Lens (Virtue/Deontology/Utilitarianism)", "Ethical Dilemma Identification", "Stakeholder Matrix", "Actionable Resolution"],
+      "key_terminology": ["Conflict of Interest", "Integrity", "Objectivity", "Empathy", "Probity", "Moral Courage"],
+      "teaching_methods": ["Stakeholder dilemma decomposition", "Administrative case-study roleplay", "Thinker-to-practice application"],
+      "examples": ["Recusal in procurement conflict of interest", "Whistleblowing vs institutional loyalty"],
+      "adaptive_visual_methods": ["Stakeholder Relationship Diagrams", "Ethical Decision Trees", "Dilemma Comparison Matrices"],
+      "prelims_dimensions": ["Not applicable (Mains-only paper)"],
+      "mains_dimensions": ["Short-term expediency vs long-term public trust", "Constitutional values in administration"],
+      "assessment_methods": ["150-word value definitions with civil-service examples", "250-word structured Case Study resolution"]
+    },
+    "PRELIMS_GS1": {
+      "label": "Prelims General Studies Paper I",
+      "syllabus_focus": ["Current Events", "History", "Geography", "Polity", "Economy", "Environment", "General Science"],
+      "prerequisites": ["NCERT foundational clarity across GS subjects"],
+      "concept_hierarchy": ["Core Definition", "Factual Exception/Caveat", "Elimination Trap", "Cross-topic Link"],
+      "key_terminology": ["Statement-I / Statement-II", "Pair-matching", "Constitutional Exception"],
+      "teaching_methods": ["Conceptual clarity + common trap dissection", "Comparative tables for easy recall"],
+      "examples": ["Distinguishing Money Bill vs Financial Bill"],
+      "adaptive_visual_methods": ["Comparison Tables", "Annotated Maps", "Fact-vs-Myth Cards"],
+      "prelims_dimensions": ["High-precision facts, exceptions, and conceptual application"],
+      "mains_dimensions": ["Bridges factual base to Mains arguments"],
+      "assessment_methods": ["Elimination-proof MCQs and Assertion-Reason items"]
+    },
+    "PRELIMS_CSAT": {
+      "label": "Prelims CSAT Paper II (Qualifying)",
+      "syllabus_focus": ["Comprehension", "Logical Reasoning", "Analytical Ability", "Basic Numeracy", "Data Interpretation"],
+      "prerequisites": ["Arithmetic percentages/ratios", "Reading inference"],
+      "concept_hierarchy": ["Problem Statement", "Data/Premise Extraction", "Step-by-Step Calculation/Logic", "Option Verification"],
+      "key_terminology": ["Inference", "Assumption", "Corollary", "Percentage Point vs Percent"],
+      "teaching_methods": ["Worked step-by-step problem solving", "Visual table/graph reading"],
+      "examples": ["Bar-chart growth rate comparison", "Passage assumption vs inference"],
+      "adaptive_visual_methods": ["Step-by-Step Problem-Solving Animations", "Annotated Data Charts & Tables"],
+      "prelims_dimensions": ["Qualifying 33% accuracy & time management"],
+      "mains_dimensions": ["Not applicable (strictly separate from Mains GS Paper II)"],
+      "assessment_methods": ["Timed CSAT numerical and comprehension practice sets"]
+    },
+    "ESSAY": {
+      "label": "UPSC Mains Essay Paper",
+      "syllabus_focus": ["Philosophical Essays", "Socio-Economic & Governance Essays"],
+      "prerequisites": ["Multi-disciplinary GS synthesis"],
+      "concept_hierarchy": ["Anecdote/Hook", "Thesis", "Temporal & Spatial Dimensions", "Counter-perspective", "Synthesis"],
+      "key_terminology": ["Thesis", "Antithesis", "Synthesis", "PESTEL Dimensions"],
+      "teaching_methods": ["Brainstorming & structural outlining"],
+      "examples": ["Connecting Gandhian ethics to modern AI governance"],
+      "adaptive_visual_methods": ["Mind Maps", "Dimension Trees"],
+      "prelims_dimensions": ["Not applicable"],
+      "mains_dimensions": ["Coherence, depth, and balanced philosophical-empirical synthesis"],
+      "assessment_methods": ["Structured 1000-1200 word essay outline evaluation"]
+    },
+    "CURRENT_AFFAIRS": {
+      "label": "Current Affairs Integration Module",
+      "syllabus_focus": ["Recent Policies", "Judgments", "Economic Data", "International Summits"],
+      "prerequisites": ["Static syllabus anchor"],
+      "concept_hierarchy": ["Static Concept Anchor", "What Changed (Cutoff-Dated)", "Official Source Evidence", "Prelims/Mains Impact"],
+      "key_terminology": ["Research Cutoff Date", "Reference Period", "Gazette Notification"],
+      "teaching_methods": ["Static-to-dynamic linkage"],
+      "examples": ["Linking recent MPC repo rate stance to inflation target framework"],
+      "adaptive_visual_methods": ["Before/After Policy Split-Screen", "Timeline Updates"],
+      "prelims_dimensions": ["New institutions, indices, and statutory amendments"],
+      "mains_dimensions": ["Updated data & recent committee/SC rulings for answers"],
+      "assessment_methods": ["Current-linked Prelims MCQs and Mains update prompts"]
+    }
+  }
+}

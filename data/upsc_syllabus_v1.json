@@ -1,0 +1,230 @@
+{
+  "version": "UPSC_CSE_2025_v1",
+  "source": "UPSC Official Civil Services Examination Notification Syllabus",
+  "items": [
+    {
+      "id": "PRE_GS1_CURR",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "Current Events",
+      "subtopic": "Current events of national and international importance",
+      "keywords": ["current affairs", "summit", "bilateral", "index", "report", "recent", "policy update"]
+    },
+    {
+      "id": "PRE_GS1_HIST",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "History of India",
+      "subtopic": "History of India and Indian National Movement",
+      "keywords": ["indus valley", "vedic", "maurya", "gupta", "mughal", "bhakti", "1857", "gandhi", "congress", "national movement", "freedom struggle"]
+    },
+    {
+      "id": "PRE_GS1_GEOG",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "Geography",
+      "subtopic": "Indian and World Geography - Physical, Social, Economic Geography",
+      "keywords": ["monsoon", "river", "plate tectonics", "soil", "climate", "mineral", "drainage", "himalaya", "ocean current"]
+    },
+    {
+      "id": "PRE_GS1_POL",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "Indian Polity and Governance",
+      "subtopic": "Constitution, Political System, Panchayati Raj, Public Policy, Rights Issues",
+      "keywords": ["constitution", "fundamental rights", "dpsp", "parliament", "president", "supreme court", "panchayati raj", "anti-defection", "tenth schedule", "article", "amendment", "election"]
+    },
+    {
+      "id": "PRE_GS1_ECON",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "Economic and Social Development",
+      "subtopic": "Sustainable Development, Poverty, Inclusion, Demographics, Social Sector Initiatives",
+      "keywords": ["gdp", "inflation", "rbi", "monetary policy", "repo rate", "fiscal deficit", "poverty", "inclusion", "demographic", "budget"]
+    },
+    {
+      "id": "PRE_GS1_ENV",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "Environment and Ecology",
+      "subtopic": "Environmental ecology, Biodiversity and Climate Change",
+      "keywords": ["biodiversity", "climate change", "iucn", "national park", "ramsar", "unfccc", "paris agreement", "carbon", "ecosystem"]
+    },
+    {
+      "id": "PRE_GS1_SCI",
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "topic": "General Science",
+      "subtopic": "General Science and everyday scientific principles",
+      "keywords": ["vaccine", "dna", "rna", "satellite", "isro", "quantum", "crispr", "biotechnology", "physics", "chemistry"]
+    },
+    {
+      "id": "PRE_CSAT_COMP",
+      "stage": "PRELIMS",
+      "paper": "Prelims CSAT Paper II",
+      "topic": "Comprehension & Reasoning",
+      "subtopic": "Comprehension, Logical Reasoning, Analytical Ability, Decision Making",
+      "keywords": ["csat", "comprehension", "syllogism", "logical reasoning", "decision making", "inference"]
+    },
+    {
+      "id": "PRE_CSAT_NUM",
+      "stage": "PRELIMS",
+      "paper": "Prelims CSAT Paper II",
+      "topic": "Numeracy & Data Interpretation",
+      "subtopic": "Basic numeracy, orders of magnitude, Data interpretation (charts, graphs, tables)",
+      "keywords": ["csat", "numeracy", "percentage", "ratio", "permutation", "probability", "data interpretation"]
+    },
+    {
+      "id": "MAINS_GS1_CULT",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper I",
+      "topic": "Indian Heritage and Culture",
+      "subtopic": "Salient aspects of Art Forms, Literature and Architecture from ancient to modern times",
+      "keywords": ["temple architecture", "nagara", "dravida", "classical dance", "painting", "buddhist", "stupa", "literature"]
+    },
+    {
+      "id": "MAINS_GS1_HIST",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper I",
+      "topic": "Modern Indian History & Freedom Struggle",
+      "subtopic": "Modern Indian history, Freedom Struggle, Post-independence consolidation, World History",
+      "keywords": ["colonial", "nationalist", "quit india", "partition", "reorganisation of states", "industrial revolution", "world war"]
+    },
+    {
+      "id": "MAINS_GS1_SOC",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper I",
+      "topic": "Indian Society",
+      "subtopic": "Salient features of Indian Society, Diversity, Women, Poverty, Urbanisation, Globalisation",
+      "keywords": ["caste", "secularism", "communalism", "regionalism", "women empowerment", "urbanisation", "globalisation"]
+    },
+    {
+      "id": "MAINS_GS1_GEOG",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper I",
+      "topic": "Geography of India and the World",
+      "subtopic": "Physical geography, Natural resources distribution, Geophysical phenomena",
+      "keywords": ["earthquake", "tsunami", "volcano", "cyclone", "monsoon", "resource distribution", "mineral", "glacier"]
+    },
+    {
+      "id": "MAINS_GS2_CONST",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "Indian Constitution",
+      "subtopic": "Historical underpinnings, evolution, features, amendments, significant provisions and basic structure",
+      "keywords": ["constitution", "basic structure", "amendment", "preamble", "fundamental rights", "dpsp", "fundamental duties", "tenth schedule", "anti-defection"]
+    },
+    {
+      "id": "MAINS_GS2_FED",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "Federalism & Separation of Powers",
+      "subtopic": "Functions and responsibilities of Union and States, federalism, separation of powers, dispute redressal",
+      "keywords": ["federalism", "centre-state", "seventh schedule", "gst council", "inter-state council", "separation of powers", "governor"]
+    },
+    {
+      "id": "MAINS_GS2_PARL",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "Parliament, Executive and Judiciary",
+      "subtopic": "Parliament and State legislatures: structure, functioning, conduct of business, powers, privileges, anti-defection",
+      "keywords": ["parliament", "lok sabha", "rajya sabha", "speaker", "anti-defection", "tenth schedule", "judicial review", "collegium", "executive", "ordinance", "money bill"]
+    },
+    {
+      "id": "MAINS_GS2_BODIES",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "Constitutional & Statutory Bodies",
+      "subtopic": "Appointment to Constitutional posts, powers, functions of Constitutional, Statutory, Regulatory and quasi-judicial bodies",
+      "keywords": ["election commission", "cag", "upsc", "finance commission", "nhrc", "sebi", "rbi", "tribunal"]
+    },
+    {
+      "id": "MAINS_GS2_GOV",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "Governance & Social Justice",
+      "subtopic": "Welfare schemes, transparency, accountability, e-governance, citizen charters, health, education, civil services",
+      "keywords": ["governance", "transparency", "rti", "e-governance", "citizen charter", "welfare scheme", "health", "education", "civil services", "ngo", "shg"]
+    },
+    {
+      "id": "MAINS_GS2_IR",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "topic": "International Relations",
+      "subtopic": "India and its neighbourhood relations, bilateral/regional/global groupings, international institutions",
+      "keywords": ["foreign policy", "neighbourhood", "quad", "brics", "un", "wto", "imf", "indo-pacific", "bilateral", "diaspora"]
+    },
+    {
+      "id": "MAINS_GS3_ECON",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Indian Economy & Budgeting",
+      "subtopic": "Planning, mobilisation of resources, growth, development, employment, inclusive growth, government budgeting",
+      "keywords": ["economy", "gdp", "fiscal policy", "monetary policy", "rbi", "mpc", "inflation", "budget", "gst", "inclusive growth", "employment"]
+    },
+    {
+      "id": "MAINS_GS3_AGRI",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Agriculture & Land Reforms",
+      "subtopic": "Major crops, irrigation, e-technology, subsidies, MSP, PDS, food processing, land reforms",
+      "keywords": ["agriculture", "msp", "pds", "irrigation", "food processing", "land reform", "cropping pattern", "fci"]
+    },
+    {
+      "id": "MAINS_GS3_INFRA",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Infrastructure & Investment Models",
+      "subtopic": "Energy, ports, roads, airports, railways, PPP and investment models",
+      "keywords": ["infrastructure", "ppp", "bot", "ham", "gatishakti", "renewable energy", "logistics"]
+    },
+    {
+      "id": "MAINS_GS3_SCI",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Science and Technology",
+      "subtopic": "Developments and applications in IT, space, computers, robotics, nano-tech, bio-tech, AI, IPR",
+      "keywords": ["isro", "space", "artificial intelligence", "quantum", "biotechnology", "robotics", "cyber", "ipr", "patent"]
+    },
+    {
+      "id": "MAINS_GS3_ENV",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Environment & Disaster Management",
+      "subtopic": "Conservation, environmental pollution and degradation, EIA, Disaster and disaster management",
+      "keywords": ["conservation", "eia", "pollution", "climate", "ndma", "disaster management", "wetland", "forest"]
+    },
+    {
+      "id": "MAINS_GS3_SEC",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "topic": "Internal Security",
+      "subtopic": "Extremism, cybersecurity, border management, money-laundering, organised crime and terrorism",
+      "keywords": ["internal security", "cybersecurity", "border management", "money laundering", "pmla", "terrorism", "naxalism", "uapa"]
+    },
+    {
+      "id": "MAINS_GS4_ETHICS",
+      "stage": "MAINS",
+      "paper": "Mains GS Paper IV",
+      "topic": "Ethics, Integrity and Aptitude",
+      "subtopic": "Ethics and human interface, attitude, emotional intelligence, moral thinkers, probity in governance, case studies",
+      "keywords": ["ethics", "integrity", "impartiality", "emotional intelligence", "probity", "code of conduct", "ethical dilemma", "case study"]
+    },
+    {
+      "id": "MAINS_ESSAY",
+      "stage": "ESSAY",
+      "paper": "Essay Paper",
+      "topic": "Essay Writing",
+      "subtopic": "Philosophical, socio-economic, and governance essays (separate from Mains GS)",
+      "keywords": ["essay", "philosophical"]
+    },
+    {
+      "id": "MAINS_OPT",
+      "stage": "OPTIONAL",
+      "paper": "Optional Subject",
+      "topic": "Optional Paper I & II",
+      "subtopic": "User-selected Optional Subject (kept separate from Mains GS)",
+      "keywords": ["optional subject"]
+    }
+  ]
+}

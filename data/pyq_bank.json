@@ -1,0 +1,66 @@
+{
+  "version": "2026.1",
+  "note": "Only authentic UPSC CSE questions with known year, stage, and paper are stored here. Never label generated practice questions as UPSC PYQs.",
+  "pyqs": [
+    {
+      "id": "PYQ_2022_PRE_GS1_POL_1",
+      "year": 2022,
+      "stage": "PRELIMS",
+      "paper": "Prelims GS Paper I",
+      "syllabus_item_id": "PRE_GS1_POL",
+      "topic_tags": ["anti-defection", "tenth schedule", "speaker"],
+      "exact_wording": "With reference to anti-defection law in India, consider the following statements: 1. The law specifies that a nominated legislator cannot join any political party within six months of being appointed to the House. 2. The law does not provide any time-frame within which the presiding officer has to decide a defection case.",
+      "underlying_concepts": ["Tenth Schedule nominated member 6-month rule", "Absence of statutory time limit for Presiding Officer"],
+      "official_source": "UPSC Civil Services (Preliminary) Examination 2022 GS Paper-I",
+      "authenticity_status": "VERIFIED_OFFICIAL"
+    },
+    {
+      "id": "PYQ_2017_MAINS_GS2_FED_1",
+      "year": 2017,
+      "stage": "MAINS",
+      "paper": "Mains GS Paper II",
+      "syllabus_item_id": "MAINS_GS2_FED",
+      "topic_tags": ["federalism", "cooperative federalism", "centre-state"],
+      "exact_wording": "Examine the scope of Fundamental Rights in the light of the latest judgement of the Supreme Court on Right to Privacy.",
+      "underlying_concepts": ["Article 21", "K.S. Puttaswamy judgment", "Proportionality test"],
+      "official_source": "UPSC Civil Services (Main) Examination 2017 GS Paper-II",
+      "authenticity_status": "VERIFIED_OFFICIAL"
+    },
+    {
+      "id": "PYQ_2020_MAINS_GS1_MONSOON",
+      "year": 2020,
+      "stage": "MAINS",
+      "paper": "Mains GS Paper I",
+      "syllabus_item_id": "MAINS_GS1_GEOG",
+      "topic_tags": ["monsoon", "indian monsoon", "climate"],
+      "exact_wording": "Account for the huge flooding of million cities in India including the smart ones like Hyderabad and Pune. Suggest lasting remedial measures.",
+      "underlying_concepts": ["Urban hydrology", "Extreme monsoon rainfall events", "Drainage encroachment"],
+      "official_source": "UPSC Civil Services (Main) Examination 2020 GS Paper-I",
+      "authenticity_status": "VERIFIED_OFFICIAL"
+    },
+    {
+      "id": "PYQ_2021_MAINS_GS3_ECON",
+      "year": 2021,
+      "stage": "MAINS",
+      "paper": "Mains GS Paper III",
+      "syllabus_item_id": "MAINS_GS3_ECON",
+      "topic_tags": ["inflation", "monetary policy", "rbi"],
+      "exact_wording": "Do you agree that the Indian economy has recently experienced V-shaped recovery? Give reasons in support of your answer.",
+      "underlying_concepts": ["GDP growth trajectory", "Macroeconomic recovery indicators"],
+      "official_source": "UPSC Civil Services (Main) Examination 2021 GS Paper-III",
+      "authenticity_status": "VERIFIED_OFFICIAL"
+    },
+    {
+      "id": "PYQ_2022_MAINS_GS4_ETHICS",
+      "year": 2022,
+      "stage": "MAINS",
+      "paper": "Mains GS Paper IV",
+      "syllabus_item_id": "MAINS_GS4_ETHICS",
+      "topic_tags": ["conflict of interest", "ethics", "integrity"],
+      "exact_wording": "What do you understand by 'moral integrity' and 'professional efficiency' in the context of corporate governance in India? Illustrate with suitable examples.",
+      "underlying_concepts": ["Moral integrity", "Conflict of interest avoidance", "Corporate & public governance"],
+      "official_source": "UPSC Civil Services (Main) Examination 2022 GS Paper-IV",
+      "authenticity_status": "VERIFIED_OFFICIAL"
+    }
+  ]
+}

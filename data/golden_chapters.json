@@ -1,0 +1,105 @@
+{
+  "version": "2026.1",
+  "chapters": [
+    {
+      "id": "BM_01",
+      "title": "Indian National Movement",
+      "expected_specialist": "GS-I",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper I"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["1857 Revolt", "Moderates and Extremists", "Gandhian Mass Movements", "Constitutional Acts"],
+      "expected_visual_style": "Timeline / Historical Map",
+      "sample_notes": "The Indian National Movement refers to the organised struggle against British colonial rule from 1857 to 1947. Its mechanism evolved from Moderate constitutionalism (1885-1905) to Gandhian mass satyagraha like Non-Cooperation (1920) and Quit India (1942). For example, the Civil Disobedience Movement used salt satyagraha to mobilise masses. A major challenge was communal polarisation leading to Partition."
+    },
+    {
+      "id": "BM_02",
+      "title": "Indian Monsoon",
+      "expected_specialist": "GS-I",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper I"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Differential Heating", "ITCZ Shift", "El Nino / IOD", "Monsoon Break"],
+      "expected_visual_style": "Map / Process Diagram",
+      "sample_notes": "Indian Monsoon refers to the seasonal reversal of winds bringing rainfall across the subcontinent. The mechanism is driven by differential heating of land and sea, northward shift of ITCZ, Somali jet, and Mascarene High. For example, positive Indian Ocean Dipole can offset El Nino deficits. A key challenge is spatial-temporal variability causing droughts and urban floods."
+    },
+    {
+      "id": "BM_03",
+      "title": "Fundamental Rights and Constitutional Remedies",
+      "expected_specialist": "GS-II",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper II"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Part III (Articles 12-35)", "Article 32 Writs", "Reasonable Restrictions", "Basic Structure"],
+      "expected_visual_style": "Constitutional Diagram / Flowchart",
+      "sample_notes": "Fundamental Rights in Part III (Articles 12-35) protect citizens against arbitrary state action. Under Article 32, the Supreme Court issues writs (Habeas Corpus, Mandamus, Prohibition, Certiorari, Quo Warranto) as a constitutional remedy. For example, K.S. Puttaswamy (2017) affirmed Privacy under Article 21. Limitations include reasonable restrictions under Article 19(2)-(6)."
+    },
+    {
+      "id": "BM_04",
+      "title": "Federalism",
+      "expected_specialist": "GS-II",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper II"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Seventh Schedule", "Cooperative & Competitive Federalism", "GST Council", "Governor Role"],
+      "expected_visual_style": "Institutional Structure / Map",
+      "sample_notes": "Federalism refers to constitutional division of powers between Union and States under the Seventh Schedule. Mechanisms like the GST Council (Article 279A) and Inter-State Council institutionalise cooperative federalism. For example, Finance Commission devolution balances vertical and horizontal equity. Challenges include disputes over Governor's assent and fiscal centralisation."
+    },
+    {
+      "id": "BM_05",
+      "title": "Inflation and Monetary Policy",
+      "expected_specialist": "GS-III",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper III"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["CPI vs WPI", "Monetary Policy Committee", "Repo Rate Transmission", "Growth-Inflation Tradeoff"],
+      "expected_visual_style": "Data Chart / Economic Mechanism",
+      "sample_notes": "Inflation means a sustained rise in the general price level, tracked in India primarily via CPI. The Monetary Policy Committee (MPC) under the RBI Act 1934 targets 4% (+/- 2%) CPI inflation using Repo Rate adjustments. For example, raising the Repo Rate tightens liquidity to cool demand-pull inflation. A limitation is that monetary policy has weaker control over supply-side food shocks."
+    },
+    {
+      "id": "BM_06",
+      "title": "Agriculture and Food Security",
+      "expected_specialist": "GS-III",
+      "expected_papers": ["Mains GS Paper III"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["MSP & Procurement", "Public Distribution System", "NFSA 2013", "Crop Diversification"],
+      "expected_visual_style": "Data Chart / Process Flowchart",
+      "sample_notes": "Agriculture and Food Security refers to ensuring physical and economic access to nutritious food through production, MSP procurement, and PDS. Under NFSA 2013, subsidised foodgrains are distributed via Fair Price Shops. For example, e-NAM and FCI buffer norms support price stability. Challenges include skewed cereal-centric MSP, groundwater depletion, and post-harvest losses."
+    },
+    {
+      "id": "BM_07",
+      "title": "Biodiversity and Ecosystems",
+      "expected_specialist": "GS-III",
+      "expected_papers": ["Prelims GS Paper I", "Mains GS Paper III"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Biodiversity Hotspots", "In-situ vs Ex-situ", "Wildlife Protection Act 1972", "IUCN Red List"],
+      "expected_visual_style": "Ecosystem Diagram / Map",
+      "sample_notes": "Biodiversity refers to variability among living organisms across genetic, species, and ecosystem levels. Conservation works through in-situ protected areas (National Parks, Biosphere Reserves) under the Wildlife Protection Act 1972 and ex-situ seed banks. For example, Project Tiger restored flagship predator habitats. Challenges include habitat fragmentation and invasive alien species."
+    },
+    {
+      "id": "BM_08",
+      "title": "Ethics and Conflict of Interest",
+      "expected_specialist": "GS-IV",
+      "expected_papers": ["Mains GS Paper IV"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Actual vs Potential Conflict", "Integrity & Impartiality", "Recusal & Disclosure", "Public Trust"],
+      "expected_visual_style": "Stakeholder Diagram / Decision Tree",
+      "sample_notes": "Conflict of Interest refers to a situation where private or personal interests may improperly influence official public duties. Its resolution mechanism relies on mandatory disclosure, recusal, and institutional oversight. For example, a procurement officer whose relative bids for a tender must recuse themselves. Failure erodes public trust and probity in governance."
+    },
+    {
+      "id": "BM_09",
+      "title": "International Relations",
+      "expected_specialist": "GS-II",
+      "expected_papers": ["Mains GS Paper II"],
+      "forbidden_papers": ["Prelims CSAT Paper II"],
+      "mandatory_concepts": ["Strategic Autonomy", "Neighbourhood First", "Multilateral Reform", "Indo-Pacific"],
+      "expected_visual_style": "Geopolitical Map / Comparison",
+      "sample_notes": "India's International Relations are guided by strategic autonomy, Neighbourhood First, and multi-alignment across groupings like QUAD and BRICS. Bilateral mechanisms balance security, trade, and diaspora interests. For example, Indo-Pacific maritime partnerships strengthen supply-chain resilience. Challenges include great-power rivalry and regional connectivity bottlenecks."
+    },
+    {
+      "id": "BM_10",
+      "title": "CSAT Data Interpretation",
+      "expected_specialist": "PRELIMS_CSAT",
+      "expected_papers": ["Prelims CSAT Paper II"],
+      "forbidden_papers": ["Mains GS Paper II"],
+      "mandatory_concepts": ["Percentage Change", "Ratio & Proportion", "Chart Reading", "Approximation Traps"],
+      "expected_visual_style": "Step-by-Step Problem Solving / Data Chart",
+      "sample_notes": "CSAT Data Interpretation refers to extracting quantitative relationships from tables, bar charts, and pie charts. The step-by-step mechanism involves identifying base values, units, and percentage-point vs percentage changes. For example, comparing year-on-year growth requires dividing the absolute difference by the base year value. Common mistakes include misreading dual-axis units."
+    }
+  ]
+}
