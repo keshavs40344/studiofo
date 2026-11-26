@@ -137,3 +137,19 @@ def test_empty_workflow_completes_without_handlers():
     result = DependencyScheduler(store, {}).run("wf-empty", [])
     assert result["status"] == "COMPLETED"
     assert result["task_count"] == 0
+
+
+def test_worker_level_failure_is_not_misreported_as_completed_task():
+    _, store = make_runtime()
+    scheduler = DependencyScheduler(store, {
+        "audit": lambda p: {"status": "FAILED", "error": "missing evidence"},
+        "release": lambda p: {"status": "RELEASE_READY"},
+    })
+    result = scheduler.run("wf-business-fail", [
+        TaskSpec("audit", "AUDIT", "audit"),
+        TaskSpec("release", "RELEASE", "release", ("audit",)),
+    ])
+    assert result["status"] == "FAILED"
+    assert result["failed"] == 1
+    assert result["blocked"] == 1
+    assert result["tasks"][0]["output_json"] == '{"error": "missing evidence", "status": "FAILED"}'
