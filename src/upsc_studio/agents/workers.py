@@ -86,7 +86,7 @@ def rights_asset_audit(payload: dict[str, Any]) -> dict[str, Any]:
 
 def release_gate(payload: dict[str, Any]) -> dict[str, Any]:
     """Combine independent gate results; approval is deliberately separate."""
-    gates = payload.get("gates", {})
+    gates = payload.get("gates") or payload.get("_dependency_outputs", {})
     if not isinstance(gates, dict) or not gates:
         return {"status": "BLOCKED", "failed_gates": ["gate_results_missing"]}
     failed = [name for name, result in gates.items()
@@ -106,3 +106,28 @@ def default_worker_handlers() -> dict[str, Any]:
         "rights_asset_audit": rights_asset_audit,
         "release_gate": release_gate,
     }
+
+
+def build_quality_review_tasks(
+    topic_payload: dict[str, Any],
+    coverage_payload: dict[str, Any],
+    evidence_payload: dict[str, Any],
+    rights_payload: dict[str, Any],
+    *,
+    human_release_approval: bool = False,
+):
+    """Create a deterministic quality DAG; it never uploads or publishes content."""
+    from upsc_studio.agents.runtime import TaskSpec
+
+    return [
+        TaskSpec("topic_profile", "TOPIC_PROFILE", "topic_profile", payload=topic_payload),
+        TaskSpec("coverage_audit", "COVERAGE_AUDITOR", "coverage_audit",
+                 depends_on=("topic_profile",), payload=coverage_payload),
+        TaskSpec("evidence_audit", "EVIDENCE_AUDITOR", "evidence_completeness_audit",
+                 depends_on=("topic_profile",), payload=evidence_payload),
+        TaskSpec("rights_audit", "RIGHTS_AUDITOR", "rights_asset_audit",
+                 depends_on=("topic_profile",), payload=rights_payload),
+        TaskSpec("release_gate", "RELEASE_GATE", "release_gate",
+                 depends_on=("coverage_audit", "evidence_audit", "rights_audit"),
+                 payload={"human_release_approval": human_release_approval}),
+    ]
