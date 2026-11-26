@@ -7,7 +7,7 @@ from pathlib import Path
 
 from upsc_studio.core.paths import DEFAULT_DATA_DIR
 
-AUTO_UPLOAD = True
+AUTO_UPLOAD = False
 DEFAULT_PRIVACY_STATUS = "private"
 AUTO_PUBLICATION = False
 PUBLICATION_REQUIRES_USER_APPROVAL = True
