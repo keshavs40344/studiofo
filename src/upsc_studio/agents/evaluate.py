@@ -8,7 +8,14 @@ from upsc_studio.agents.workers import default_worker_handlers
 
 
 def run_evaluations(cases_path: Path | None = None) -> dict:
-    path = cases_path or Path(__file__).parent / "fixtures" / "agent_eval_cases.json"
+    if cases_path is not None:
+        path = Path(cases_path)
+    else:
+        repository_fixture = Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "agent_eval_cases.json"
+        packaged_fixture = Path(__file__).parent / "fixtures" / "agent_eval_cases.json"
+        path = repository_fixture if repository_fixture.is_file() else packaged_fixture
+    if not path.is_file():
+        raise FileNotFoundError(f"Agent evaluation fixture not found: {path}")
     cases = json.loads(path.read_text(encoding="utf-8"))
     handlers = default_worker_handlers()
     results = []
