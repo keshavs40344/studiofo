@@ -277,6 +277,10 @@ class DependencyScheduler:
                     payload = dict(spec.payload)
                     payload["_workflow_id"] = workflow_id
                     payload["_task_id"] = ids[spec.task_id]
+                    payload["_dependency_outputs"] = {
+                        dep: json.loads(rows[dep]["output_json"] or "{}")
+                        for dep in spec.depends_on
+                    }
                     output = self.handlers[spec.handler](payload)
                     self.store.transition(ids[spec.task_id], "COMPLETED", output=output)
                 except Exception as exc:
@@ -296,6 +300,10 @@ class DependencyScheduler:
                     payload = dict(spec.payload)
                     payload["_workflow_id"] = workflow_id
                     payload["_task_id"] = task_id
+                    payload["_dependency_outputs"] = {
+                        dep: json.loads(self.store.get(ids[dep])["output_json"] or "{}")
+                        for dep in spec.depends_on
+                    }
                     self.store.transition(task_id, "COMPLETED", output=self.handlers[spec.handler](payload))
                 except Exception as exc:
                     row = self.store.get(task_id)
