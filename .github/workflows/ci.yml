@@ -38,3 +38,6 @@ jobs:
           }
       - name: Run test suite
         run: python -m pytest -q
+
+      - name: Run deterministic agent evaluation suite
+        run: python -m upsc_studio.agents.evaluate
