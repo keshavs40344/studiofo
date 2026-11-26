@@ -263,76 +263,64 @@ class DependencyScheduler:
 
     def run(self, workflow_id: str, specs: Iterable[TaskSpec], *, input_fingerprint: str = "") -> dict:
         items = self.validate(specs)
+        if not workflow_id.strip():
+            raise ValueError("workflow_id is required")
         ids = {s.task_id: self.store.enqueue(workflow_id, s, input_fingerprint) for s in items}
-        spec_by_id = {s.task_id: s for s in items}
-        made_progress = True
-        while made_progress:
-            made_progress = False
+        self.store.quarantine_interrupted(workflow_id)
+        if not items:
+            return {"workflow_id": workflow_id, "status": "COMPLETED", "task_count": 0, "completed": 0, "failed": 0, "blocked": 0, "review_required": 0, "tasks": []}
+        progress = True
+        while progress:
+            progress = False
             rows = {s.task_id: self.store.get(ids[s.task_id]) for s in items}
             for spec in items:
+                task_id = ids[spec.task_id]
                 row = rows[spec.task_id]
-                if row["status"] in TERMINAL:
+                if row["status"] in TERMINAL or row["status"] == "RUNNING":
                     continue
-                dep_rows = [rows[d] for d in spec.depends_on]
-                if any(d["status"] in {"FAILED", "BLOCKED"} for d in dep_rows):
-                    self.store.transition(ids[spec.task_id], "BLOCKED", error="A dependency did not complete")
-                    made_progress = True
+                deps = [rows[d] for d in spec.depends_on]
+                if any(d["status"] in {"FAILED", "BLOCKED", "SKIPPED", "REVIEW_REQUIRED"} for d in deps):
+                    self.store.transition(task_id, "BLOCKED", error="A dependency did not complete successfully")
+                    progress = True
                     continue
-                if not all(d["status"] == "COMPLETED" for d in dep_rows):
+                if not all(d["status"] == "COMPLETED" for d in deps):
                     continue
                 if spec.handler not in self.handlers:
-                    self.store.transition(ids[spec.task_id], "FAILED", error=f"No handler registered: {spec.handler}")
-                    made_progress = True
+                    self.store.transition(task_id, "FAILED", error=f"No handler registered: {spec.handler}")
+                    progress = True
                     continue
-                self.store.transition(ids[spec.task_id], "RUNNING")
-                try:
-                    payload = dict(spec.payload)
-                    payload["_workflow_id"] = workflow_id
-                    payload["_task_id"] = ids[spec.task_id]
-                    payload["_dependency_outputs"] = {
-                        dep: json.loads(rows[dep]["output_json"] or "{}")
-                        for dep in spec.depends_on
-                    }
-                    output = self.handlers[spec.handler](payload)
-                    self.store.transition(ids[spec.task_id], "COMPLETED", output=output)
-                except Exception as exc:
-                    latest = self.store.get(ids[spec.task_id])
-                    if int(latest["attempts"]) <= int(latest["max_retries"]) and isinstance(exc, (TimeoutError, ConnectionError)):
-                        self.store.transition(ids[spec.task_id], "RETRY_WAIT", error=f"{type(exc).__name__}: {exc}")
-                    else:
-                        self.store.transition(ids[spec.task_id], "FAILED", error=f"{type(exc).__name__}: {exc}")
-                made_progress = True
-        # Retry transient failures in bounded passes, retaining completed task outputs.
-        for spec in items:
-            task_id = ids[spec.task_id]
-            row = self.store.get(task_id)
-            while row["status"] == "RETRY_WAIT":
-                self.store.transition(task_id, "RUNNING")
-                try:
-                    payload = dict(spec.payload)
-                    payload["_workflow_id"] = workflow_id
-                    payload["_task_id"] = task_id
-                    payload["_dependency_outputs"] = {
-                        dep: json.loads(self.store.get(ids[dep])["output_json"] or "{}")
-                        for dep in spec.depends_on
-                    }
-                    self.store.transition(task_id, "COMPLETED", output=self.handlers[spec.handler](payload))
-                except Exception as exc:
-                    row = self.store.get(task_id)
-                    if int(row["attempts"]) <= int(row["max_retries"]) and isinstance(exc, (TimeoutError, ConnectionError)):
-                        self.store.transition(task_id, "RETRY_WAIT", error=f"{type(exc).__name__}: {exc}")
-                    else:
-                        self.store.transition(task_id, "FAILED", error=f"{type(exc).__name__}: {exc}")
-                row = self.store.get(task_id)
+                if row["status"] == "RETRY_WAIT" and not spec.retry_safe:
+                    self.store.transition(task_id, "REVIEW_REQUIRED", error="Retry pending after restart; handler is not declared retry-safe.")
+                    progress = True
+                    continue
+                while True:
+                    self.store.transition(task_id, "RUNNING")
+                    try:
+                        payload = dict(spec.payload)
+                        payload["_workflow_id"] = workflow_id
+                        payload["_task_id"] = task_id
+                        payload["_dependency_outputs"] = {dep: json.loads(self.store.get(ids[dep])["output_json"] or "{}") for dep in spec.depends_on}
+                        output = self.handlers[spec.handler](payload)
+                        self.store.transition(task_id, "COMPLETED", output=output)
+                        progress = True
+                        break
+                    except Exception as exc:
+                        latest = self.store.get(task_id)
+                        transient = isinstance(exc, (TimeoutError, ConnectionError))
+                        retry = transient and spec.retry_safe and int(latest["attempts"]) <= int(latest["max_retries"])
+                        if retry:
+                            self.store.transition(task_id, "RETRY_WAIT", error=f"{type(exc).__name__}: {exc}")
+                            continue
+                        self.store.transition(task_id, "FAILED" if not transient else "REVIEW_REQUIRED", error=f"{type(exc).__name__}: {exc}")
+                        progress = True
+                        break
         final_rows = [self.store.get(ids[s.task_id]) for s in items]
+        failed_required = [r for r in final_rows if r["required"] and r["status"] != "COMPLETED"]
+        review_count = sum(r["status"] == "REVIEW_REQUIRED" for r in final_rows)
         statuses = {r["status"] for r in final_rows}
-        failed_required = [r["task_id"] for r in final_rows if r["required"] and r["status"] != "COMPLETED"]
-        return {
-            "workflow_id": workflow_id,
-            "status": "COMPLETED" if not failed_required else ("FAILED" if "FAILED" in statuses else "BLOCKED"),
-            "task_count": len(items),
-            "completed": sum(r["status"] == "COMPLETED" for r in final_rows),
-            "failed": sum(r["status"] == "FAILED" for r in final_rows),
-            "blocked": sum(r["status"] == "BLOCKED" for r in final_rows),
-            "tasks": final_rows,
-        }
+        overall = "COMPLETED" if not failed_required else ("REVIEW_REQUIRED" if review_count else ("FAILED" if "FAILED" in statuses else "BLOCKED"))
+        return {"workflow_id": workflow_id, "status": overall, "task_count": len(items),
+                "completed": sum(r["status"] == "COMPLETED" for r in final_rows),
+                "failed": sum(r["status"] == "FAILED" for r in final_rows),
+                "blocked": sum(r["status"] == "BLOCKED" for r in final_rows),
+                "review_required": review_count, "tasks": final_rows}
