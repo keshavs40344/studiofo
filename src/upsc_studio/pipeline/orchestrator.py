@@ -213,6 +213,36 @@ class ChapterPipeline:
             narration_wav = Path(audio_report["processed_file"])
         else:
             tts = PiperTTSEngine(project_dir, rights_ledger=rights_ledger)
+            voice_capabilities = tts.detect_voice_capabilities()
+            if not voice_capabilities.get("can_synthesize_hindi", False):
+                self.project_mgr.update_status(project_id, ProjectStatus.WAITING_FOR_VOICE)
+                auditor = QAAuditor(self.conn, project_dir)
+                qa_report = auditor.run_all_checks(project_id)
+                ten_gates = TenGateAuditor(self.conn, project_dir).run_ten_gates(
+                    project_id, scenes, None
+                )
+                logger.info(
+                    "No approved Hindi TTS engine is available; paused in WAITING_FOR_VOICE."
+                )
+                return {
+                    "project_id": project_id,
+                    "status": ProjectStatus.WAITING_FOR_VOICE.value,
+                    "specialist_profile": specialist_key,
+                    "matched_pyqs": len(matched_pyqs),
+                    "duration_schedule": duration_schedule,
+                    "publishing_package": pub_pkg,
+                    "recording_script": str(project_dir / "teaching" / "recording_script.md"),
+                    "chapter_map": chapter_map,
+                    "evidence_summary": evidence_ledger["status_counts"],
+                    "scenes_count": len(scenes),
+                    "voice_capabilities": voice_capabilities,
+                    "voice_wait_reason": (
+                        "No Hindi Piper model or installed Windows SAPI Hindi voice was detected. "
+                        "Supply an own-voice recording or install/configure a supported Hindi voice."
+                    ),
+                    "qa": qa_report,
+                    "ten_gates": ten_gates,
+                }
             audio_report = tts.synthesize_scenes(project_id, scenes)
             srt_path = Path(audio_report["narration_transcript_srt"])
             narration_wav = Path(audio_report["narration_full_wav"])
