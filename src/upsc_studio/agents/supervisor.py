@@ -308,7 +308,7 @@ class ExecutiveProducer:
                 agent_id="DOCUMENTARY_PRODUCTION_PIPELINE",
                 handler="chapter_pipeline",
                 depends_on=("preflight",),
-                payload=safe_payload,
+                payload=workflow_payload,
                 required=True,
                 max_retries=0,
                 retry_safe=False,
