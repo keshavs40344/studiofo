@@ -24,8 +24,18 @@ class ProjectManager:
     """
 
     BACKUP_FORMAT = "upsc-studio-project"
-    BACKUP_VERSION = 1
+    BACKUP_VERSION = 2
+    SUPPORTED_BACKUP_VERSIONS = {1, 2}
     MAX_BACKUP_UNCOMPRESSED_BYTES = 20 * 1024 * 1024 * 1024
+    PROJECT_DATA_TABLES = (
+        "source_documents",
+        "sources",
+        "claims",
+        "assets",
+        "render_jobs",
+        "qa_gates",
+        "coverage_ledger",
+    )
 
     PROJECT_DIRECTORIES = (
         "inputs/originals",
@@ -153,6 +163,114 @@ class ProjectManager:
         self.conn.commit()
         return self.get_project(project_id)
 
+    def _capture_project_database(self, project_id: str) -> dict[str, list[dict[str, Any]]]:
+        """Capture project-scoped evidence and QA rows without copying the entire DB."""
+        snapshot: dict[str, list[dict[str, Any]]] = {}
+        for table in self.PROJECT_DATA_TABLES:
+            cursor = self.conn.execute(
+                f"SELECT * FROM {table} WHERE project_id = ?", (project_id,)
+            )
+            rows = cursor.fetchall()
+            snapshot[table] = [
+                dict(row) if isinstance(row, sqlite3.Row)
+                else dict(zip((column[0] for column in cursor.description), row))
+                for row in rows
+            ]
+
+        syllabus_ids = sorted({
+            row["syllabus_item_id"]
+            for row in snapshot["coverage_ledger"]
+            if row.get("syllabus_item_id")
+        })
+        snapshot["syllabus_items"] = []
+        if syllabus_ids:
+            placeholders = ",".join("?" for _ in syllabus_ids)
+            cursor = self.conn.execute(
+                f"SELECT * FROM syllabus_items WHERE id IN ({placeholders})",
+                tuple(syllabus_ids),
+            )
+            rows = cursor.fetchall()
+            snapshot["syllabus_items"] = [
+                dict(row) if isinstance(row, sqlite3.Row)
+                else dict(zip((column[0] for column in cursor.description), row))
+                for row in rows
+            ]
+        return snapshot
+
+    def _restore_project_database(
+        self,
+        project_id: str,
+        snapshot: dict[str, Any],
+    ) -> None:
+        """Restore whitelisted project rows and referenced syllabus records safely."""
+        if not snapshot:
+            return
+        if not isinstance(snapshot, dict):
+            raise ValueError("Backup database snapshot must be an object")
+
+        # Syllabus entries are shared reference data. Insert missing referenced
+        # versions without overwriting a newer or already installed catalogue.
+        syllabus_rows = snapshot.get("syllabus_items", [])
+        if not isinstance(syllabus_rows, list):
+            raise ValueError("Backup syllabus_items must be a list")
+        for row in syllabus_rows:
+            if not isinstance(row, dict) or not row.get("id"):
+                raise ValueError("Invalid syllabus item in backup snapshot")
+            columns = [
+                info[1] for info in self.conn.execute("PRAGMA table_info(syllabus_items)")
+                if info[1] in row
+            ]
+            if set(row) - set(columns):
+                raise ValueError("Backup syllabus item contains unknown columns")
+            names = ", ".join(f'"{name}"' for name in columns)
+            placeholders = ", ".join("?" for _ in columns)
+            self.conn.execute(
+                f"INSERT OR IGNORE INTO syllabus_items ({names}) VALUES ({placeholders})",
+                tuple(row[name] for name in columns),
+            )
+
+        for table in self.PROJECT_DATA_TABLES:
+            rows = snapshot.get(table, [])
+            if not isinstance(rows, list):
+                raise ValueError(f"Backup table {table} must contain a list")
+            table_columns = [
+                info[1] for info in self.conn.execute(f"PRAGMA table_info({table})")
+            ]
+            if not table_columns:
+                raise ValueError(f"Required project table is missing: {table}")
+            for row in rows:
+                if not isinstance(row, dict) or row.get("project_id") != project_id:
+                    raise ValueError(f"Invalid project row in backup table {table}")
+                unknown = set(row) - set(table_columns)
+                if unknown:
+                    raise ValueError(
+                        f"Backup table {table} contains unknown columns: {sorted(unknown)}"
+                    )
+                columns = [name for name in table_columns if name in row]
+                if "id" not in columns:
+                    raise ValueError(f"Backup row in {table} has no primary ID")
+
+                # Never overwrite another project's row if a corrupt or
+                # conflicting backup reuses an identifier.
+                existing = self.conn.execute(
+                    f'SELECT project_id FROM {table} WHERE id = ?', (row["id"],)
+                ).fetchone()
+                if existing is not None and existing[0] != project_id:
+                    raise ValueError(
+                        f"Backup row identifier collision in {table}: {row['id']}"
+                    )
+
+                names = ", ".join(f'"{name}"' for name in columns)
+                placeholders = ", ".join("?" for _ in columns)
+                updates = [
+                    f'"{name}" = excluded."{name}"'
+                    for name in columns if name != "id"
+                ]
+                sql = f"INSERT INTO {table} ({names}) VALUES ({placeholders})"
+                if updates:
+                    sql += f' ON CONFLICT("id") DO UPDATE SET {", ".join(updates)}'
+                self.conn.execute(sql, tuple(row[name] for name in columns))
+
     def backup_project(
         self,
         project_id: str,
@@ -175,6 +293,7 @@ class ProjectManager:
             "created_at": utc_now_iso(),
             "notes": notes,
             "project": record.model_dump(mode="json"),
+            "database": self._capture_project_database(project_id),
         }
 
         try:
@@ -224,7 +343,7 @@ class ProjectManager:
                 manifest = json.loads(archive.read(manifest_info).decode("utf-8"))
                 if manifest.get("format") != self.BACKUP_FORMAT:
                     raise ValueError("Unsupported backup format")
-                if manifest.get("version") != self.BACKUP_VERSION:
+                if manifest.get("version") not in self.SUPPORTED_BACKUP_VERSIONS:
                     raise ValueError("Unsupported backup version")
 
                 project_data = manifest.get("project")
@@ -316,6 +435,9 @@ class ProjectManager:
                     restored_record.created_at,
                     utc_now_iso(),
                 ),
+            )
+            self._restore_project_database(
+                restored_record.id, manifest.get("database", {})
             )
             self.conn.commit()
             return self.get_project(restored_record.id)
