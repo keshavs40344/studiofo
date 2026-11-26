@@ -67,6 +67,7 @@ def test_project_create_reopen_backup_and_restore(tmp_path: Path) -> None:
     marker.unlink()
     conn.execute("DELETE FROM claims WHERE id = ?", (claim_id,))
     conn.execute("DELETE FROM sources WHERE id = ?", (source_id,))
+    conn.execute("DELETE FROM assets WHERE id = ?", ("asset_backup_test",))
     conn.commit()
     assert not marker.exists()
     assert conn.execute("SELECT 1 FROM claims WHERE id = ?", (claim_id,)).fetchone() is None
@@ -86,6 +87,13 @@ def test_project_create_reopen_backup_and_restore(tmp_path: Path) -> None:
     assert (Path(fresh_project.root_dir) / "teaching" / "custom_note.txt").read_text(encoding="utf-8") == "preserve me"
     assert fresh_conn.execute("SELECT 1 FROM claims WHERE id = ?", (claim_id,)).fetchone() is not None
     assert fresh_conn.execute("SELECT 1 FROM sources WHERE id = ?", (source_id,)).fetchone() is not None
+    restored_asset = fresh_conn.execute(
+        "SELECT file_path FROM assets WHERE id = ?", ("asset_backup_test",)
+    ).fetchone()
+    expected_asset_path = Path(fresh_project.root_dir) / "graphics" / "owned_asset.bin"
+    assert restored_asset is not None
+    assert Path(restored_asset["file_path"]) == expected_asset_path
+    assert expected_asset_path.read_bytes() == b"project-owned-asset"
 
 
 def test_document_ingestion_formats_and_duplicates(tmp_path: Path) -> None:
