@@ -327,3 +327,10 @@ class DependencyScheduler:
                 "failed": sum(r["status"] == "FAILED" for r in final_rows),
                 "blocked": sum(r["status"] == "BLOCKED" for r in final_rows),
                 "review_required": review_count, "tasks": final_rows}
+
+
+def create_default_scheduler(conn: sqlite3.Connection) -> DependencyScheduler:
+    """Create the SQLite-backed scheduler with the built-in deterministic audit workers."""
+    from upsc_studio.agents.workers import default_worker_handlers
+
+    return DependencyScheduler(AgentTaskStore(conn), default_worker_handlers())
