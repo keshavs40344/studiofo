@@ -59,6 +59,8 @@ class ExecutiveProducer:
                 transient = isinstance(exc, (TimeoutError, ConnectionError))
                 if retry_safe and transient and attempt < effective_retries:
                     time.sleep(0.2 * (2**attempt))
+                else:
+                    break
 
         return (
             AgentTaskResult(
@@ -69,7 +71,7 @@ class ExecutiveProducer:
                 status="FAILED",
                 execution_time_sec=round(time.perf_counter() - t0, 3),
                 errors=errors,
-                retry_count=effective_retries,
+                retry_count=max(0, len(errors) - 1),
                 verification_status="FAILED",
             ),
             None,
@@ -108,7 +110,10 @@ class ExecutiveProducer:
             jm.mark_stage("render", "FAILED", {"errors": task_res.errors})
             return {"status": "FAILED", "agent_task": task_res.model_dump()}
 
-        jm.mark_stage("render", "COMPLETED", {"final_video": pipe_out.get("render_manifest", {}).get("final_video")})
+        render_manifest = pipe_out.get("render_manifest") or {}
+        render_path = render_manifest.get("final_video")
+        render_stage = "COMPLETED" if render_path else str(pipe_out.get("status", "PENDING"))
+        jm.mark_stage("render", render_stage, {"final_video": render_path})
 
         # Editorial Shorts & SEO packaging (AGENT_06 / AGENT_20)
         from upsc_studio.db.schemas import SceneSpec
@@ -124,7 +129,7 @@ class ExecutiveProducer:
 
         # YouTube Publishing check (AGENT_23)
         yt = YouTubePublisher(token_path=youtube_token_path)
-        final_mp4 = Path(pipe_out["render_manifest"]["final_video"]) if "render_manifest" in pipe_out else None
+        final_mp4 = Path(render_path) if render_path else None
         qa_passed = (
             pipe_out.get("status") == "APPROVED"
             and pipe_out.get("qa", {}).get("academic", {}).get("status") == "PASSED"
