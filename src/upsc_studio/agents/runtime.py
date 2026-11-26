@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Iterable, Mapping
 
 
-TERMINAL = {"COMPLETED", "FAILED", "BLOCKED", "SKIPPED"}
+TERMINAL = {"COMPLETED", "FAILED", "BLOCKED", "SKIPPED", "REVIEW_REQUIRED"}
 ACTIVE = {"PENDING", "RUNNING", "RETRY_WAIT"}
 
 
@@ -43,6 +43,7 @@ class TaskSpec:
     payload: Mapping[str, Any] = field(default_factory=dict)
     required: bool = True
     max_retries: int = 2
+    retry_safe: bool = False
 
     def __post_init__(self) -> None:
         if not self.task_id.strip() or not self.agent_id.strip() or not self.handler.strip():
@@ -107,7 +108,7 @@ class AgentTaskStore:
     def enqueue(self, workflow_id: str, spec: TaskSpec, input_fingerprint: str = "") -> str:
         if not workflow_id.strip():
             raise ValueError("workflow_id is required")
-        key_material = f"{workflow_id}|{spec.task_id}|{spec.handler}|{input_fingerprint}|{_json(spec.payload)}"
+        key_material = _json({"workflow_id": workflow_id, "task_id": spec.task_id, "agent_id": spec.agent_id, "handler": spec.handler, "input_fingerprint": input_fingerprint, "payload": dict(spec.payload), "depends_on": list(spec.depends_on), "required": spec.required, "max_retries": spec.max_retries, "retry_safe": spec.retry_safe})
         idem = hashlib.sha256(key_material.encode("utf-8")).hexdigest()
         existing = self.conn.execute(
             "SELECT task_id FROM agent_tasks WHERE idempotency_key=?", (idem,)
@@ -143,7 +144,8 @@ class AgentTaskStore:
         allowed = {
             "PENDING": {"RUNNING", "BLOCKED", "SKIPPED"},
             "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED"},
-            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED"},
+            "RUNNING": {"COMPLETED", "RETRY_WAIT", "FAILED", "REVIEW_REQUIRED"},
+            "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED", "REVIEW_REQUIRED"},
         }
         row = self.get(task_id)
         if row is None:
@@ -163,6 +165,16 @@ class AgentTaskStore:
         )
         self._event(task_id, row["workflow_id"], status, {"error": error} if error else output)
         self.conn.commit()
+
+    def quarantine_interrupted(self, workflow_id: str) -> list[str]:
+        """Move crash-interrupted handlers to review; never replay unknown side effects."""
+        quarantined = []
+        for row in self.list_workflow(workflow_id):
+            if row["status"] == "RUNNING":
+                self.transition(row["task_id"], "REVIEW_REQUIRED",
+                                error="Handler was interrupted; inspect side effects before manual recovery.")
+                quarantined.append(row["task_id"])
+        return quarantined
 
     def checkpoint(self, workflow_id: str, key: str, value: Any) -> None:
         self.conn.execute(
