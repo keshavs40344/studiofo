@@ -281,12 +281,15 @@ class ExecutiveProducer:
             "gated_private_publish": publication_handler,
         })
         scheduler = DependencyScheduler(AgentTaskStore(self.conn), handlers)
-        safe_payload = {
+        workflow_payload = {
             "project_id": project_id,
             "has_notes": bool(resolved_notes or typed_notes.strip()),
             "notes_file_count": len(resolved_notes),
             "has_voice": resolved_voice is not None,
             "ai_narration_enabled": bool(ai_narration),
+        }
+        publication_payload = {
+            **workflow_payload,
             "allow_youtube_upload": bool(allow_youtube_upload),
             "human_publish_approval": bool(human_publish_approval),
         }
@@ -295,7 +298,7 @@ class ExecutiveProducer:
                 task_id="preflight",
                 agent_id="EXECUTIVE_PRODUCER",
                 handler="preflight",
-                payload=safe_payload,
+                payload=workflow_payload,
                 required=True,
                 max_retries=0,
                 retry_safe=False,
