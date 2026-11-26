@@ -32,11 +32,13 @@ class ExecutiveProducer:
         fn: Callable[[], dict],
         input_refs: list[str],
         max_retries: int = 2,
+        retry_safe: bool = False,
     ) -> tuple[AgentTaskResult, Optional[dict]]:
         """Execute an agent task with exponential backoff retry and structured contract output."""
         t0 = time.perf_counter()
         errors: list[str] = []
-        for attempt in range(max_retries + 1):
+        effective_retries = max_retries if retry_safe else 0
+        for attempt in range(effective_retries + 1):
             try:
                 out = fn()
                 return (
@@ -54,7 +56,8 @@ class ExecutiveProducer:
                 )
             except Exception as exc:
                 errors.append(str(exc))
-                if attempt < max_retries:
+                transient = isinstance(exc, (TimeoutError, ConnectionError))
+                if retry_safe and transient and attempt < effective_retries:
                     time.sleep(0.2 * (2**attempt))
 
         return (
@@ -66,7 +69,7 @@ class ExecutiveProducer:
                 status="FAILED",
                 execution_time_sec=round(time.perf_counter() - t0, 3),
                 errors=errors,
-                retry_count=max_retries,
+                retry_count=effective_retries,
                 verification_status="FAILED",
             ),
             None,
@@ -80,6 +83,8 @@ class ExecutiveProducer:
         voice_path: Optional[Path] = None,
         ai_narration: bool = True,
         youtube_token_path: Path | None = None,
+        allow_youtube_upload: bool = False,
+        human_publish_approval: bool = False,
     ) -> dict:
         """Execute full autonomous documentary factory: research -> AI/own voice -> MP4 -> QA -> YouTube check."""
         proj = self.mgr.get_project(project_id)
@@ -121,14 +126,22 @@ class ExecutiveProducer:
         yt = YouTubePublisher(token_path=youtube_token_path)
         final_mp4 = Path(pipe_out["render_manifest"]["final_video"]) if "render_manifest" in pipe_out else None
         qa_passed = (
-            pipe_out.get("qa", {}).get("rights", {}).get("status") == "PASSED"
+            pipe_out.get("status") == "APPROVED"
+            and pipe_out.get("qa", {}).get("academic", {}).get("status") == "PASSED"
+            and pipe_out.get("qa", {}).get("rights", {}).get("status") == "PASSED"
             and pipe_out.get("qa", {}).get("media", {}).get("status") == "PASSED"
         )
-        yt_result = (
-            yt.upload_video(final_mp4, pipe_out["publishing_package"], qa_passed=qa_passed, privacy_status="private")
-            if final_mp4
-            else {"status": "PENDING_VIDEO_RENDER"}
-        )
+        if not final_mp4:
+            yt_result = {"status": "PENDING_VIDEO_RENDER"}
+        elif not (allow_youtube_upload and human_publish_approval):
+            yt_result = {"status": "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+                         "upload_attempted": False, "privacy_status": "private"}
+        elif not qa_passed:
+            yt_result = {"status": "BLOCKED_QA_FAILED", "upload_attempted": False}
+        else:
+            yt_result = yt.upload_video(
+                final_mp4, pipe_out["publishing_package"], qa_passed=True, privacy_status="private"
+            )
 
         event_log = proj_dir / "logs" / "agent_events.jsonl"
         event_log.parent.mkdir(parents=True, exist_ok=True)
