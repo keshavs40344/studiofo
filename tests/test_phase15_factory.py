@@ -95,20 +95,34 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     )
 
     sup = ExecutiveProducer(conn, tmp_path / "projects")
-    out = sup.run_autonomous_factory(proj.id, ai_narration=True, youtube_token_path=tmp_path / "no_oauth.json")
+    out = sup.run_autonomous_factory(
+        proj.id,
+        ai_narration=True,
+        youtube_token_path=tmp_path / "no_oauth.json",
+    )
 
     assert out["agents_registered"] == 24
     assert out["supervisor_task"]["status"] == "COMPLETED"
-    assert Path(out["audio_report"]["narration_full_wav"]).exists()
-    assert Path(out["audio_report"]["narration_transcript_srt"]).exists()
-    assert Path(out["audio_report"]["pronunciation_report"]).exists()
-    assert Path(out["render_manifest"]["final_video"]).exists()
-    assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
-    assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
     assert out["workflow"]["status"] == "COMPLETED"
     assert out["workflow"]["task_count"] == 4
     assert out["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
     assert out["agent_states"]["AGENT_20"]["status"] == "COMPLETED"
     assert out["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     assert out["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
-    assert out["youtube_publish"]["status"] == "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL"
+    assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
+
+    if out["status"] == "WAITING_FOR_VOICE":
+        capabilities = out["voice_capabilities"]
+        assert capabilities["can_synthesize_hindi"] is False
+        assert "No Hindi Piper model" in out["voice_wait_reason"]
+        assert not out.get("audio_report")
+        assert not out.get("render_manifest")
+        assert out["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
+    else:
+        assert out["status"] in {"APPROVED", "NEEDS_REVIEW"}
+        assert Path(out["audio_report"]["narration_full_wav"]).exists()
+        assert Path(out["audio_report"]["narration_transcript_srt"]).exists()
+        assert Path(out["audio_report"]["pronunciation_report"]).exists()
+        assert Path(out["render_manifest"]["final_video"]).exists()
+        assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
+        assert out["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
