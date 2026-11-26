@@ -14,7 +14,7 @@ from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import ProjectCreate
-from upsc_studio.pipeline.orchestrator import ChapterPipeline
+from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.auditor import QAAuditor
 
@@ -253,12 +253,15 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                 shutil.copyfileobj(voice_file.file, out)
             voice_path = vdest
 
-        pipeline = ChapterPipeline(conn, resolved_projects)
-        return pipeline.run_pipeline(
+        producer = ExecutiveProducer(conn, resolved_projects)
+        return producer.execute_task_graph(
             project_id=project_id,
             notes_files=notes_paths,
             typed_notes=typed_notes,
             voice_path=voice_path,
+            ai_narration=False,
+            allow_youtube_upload=False,
+            human_publish_approval=False,
         )
 
     @app.post("/api/projects/{project_id}/backup")
