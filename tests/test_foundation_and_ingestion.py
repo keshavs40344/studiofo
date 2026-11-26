@@ -60,6 +60,22 @@ def test_project_create_reopen_backup_and_restore(tmp_path: Path) -> None:
         source_id=source_id,
         page_or_section="Part III",
     )
+    asset_path = Path(proj.root_dir) / "graphics" / "owned_asset.bin"
+    asset_path.write_bytes(b"project-owned-asset")
+    conn.execute(
+        """
+        INSERT INTO assets (
+            id, project_id, asset_type, file_path, sha256, creator, origin_url,
+            licence, attribution, rights_status, retrieved_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            "asset_backup_test", proj.id, "test_asset", str(asset_path), "test-sha256",
+            "Project owner", None, "User-owned", "No external attribution",
+            "USER_OWNED", "2026-11-27T00:00:00Z",
+        ),
+    )
+    conn.commit()
 
     bkp_zip = mgr.backup_project(proj.id, tmp_path / "backups", notes="pre-migration")
     assert bkp_zip.exists()
