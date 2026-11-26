@@ -1,4 +1,4 @@
-"""Provider-independent TTS adapter: Piper (MIT, CPU ONNX) with Windows SAPI fallback."""
+"""Provider-independent TTS adapter: Piper (MIT, CPU ONNX) with strict voice verification."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import os
 import subprocess
 import time
 from pathlib import Path
+from typing import Any
 
 from upsc_studio.audio.processor import VoiceAudioProcessor
 from upsc_studio.core.hardware import find_ffmpeg
@@ -17,7 +18,14 @@ from upsc_studio.tts.pronunciation import PronunciationNormalizer
 
 
 class PiperTTSEngine:
-    """Synthesizes Hindi/Hinglish narration segments via isolated .venv_tts Piper or SAPI fallback."""
+    """Synthesizes Hindi/Hinglish narration segments via verified Hindi voice engine.
+    
+    Hardened voice requirements:
+    - Verifies Piper model presence and license.
+    - Inspects Windows SAPI voices specifically for Hindi culture ('hi-IN').
+    - NEVER silently substitutes an English voice for Hindi text.
+    - If no suitable Hindi voice is found, raises VoiceNotAvailableError so pipeline pauses in WAITING_FOR_VOICE.
+    """
 
     def __init__(self, project_dir: Path, rights_ledger: AssetRightsLedger | None = None) -> None:
         self.project_dir = project_dir
@@ -34,9 +42,41 @@ class PiperTTSEngine:
         self.audio_proc = VoiceAudioProcessor(project_dir)
 
     def is_piper_available(self) -> bool:
+        """Check if isolated Piper python and Hindi ONNX model exist."""
         return self.tts_python.exists() and self.model_path.exists()
 
-    def synthesize_scenes(self, project_id: str, scenes: list[SceneSpec]) -> dict:
+    def get_installed_sapi_hindi_voice(self) -> str | None:
+        """Query SAPI voices on Windows to see if any Hindi voice is installed."""
+        try:
+            ps = (
+                "Add-Type -AssemblyName System.Speech; "
+                "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                "$v = $s.GetInstalledVoices() | Where-Object { $_.VoiceInfo.Culture.Name -like '*hi*' -or $_.VoiceInfo.Name -like '*Kalpana*' -or $_.VoiceInfo.Name -like '*Hemant*' } | Select-Object -First 1; "
+                "if ($v) { Write-Output $v.VoiceInfo.Name }; $s.Dispose()"
+            )
+            out = subprocess.check_output(
+                ["powershell", "-NoProfile", "-Command", ps],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            ).strip()
+            return out if out else None
+        except Exception:
+            return None
+
+    def detect_voice_capabilities(self) -> dict[str, Any]:
+        """Detect actual available Hindi voices across Piper and SAPI."""
+        piper_avail = self.is_piper_available()
+        sapi_hindi = self.get_installed_sapi_hindi_voice()
+        return {
+            "piper_hindi_available": piper_avail,
+            "piper_model_path": str(self.model_path) if self.model_path.exists() else None,
+            "sapi_hindi_available": bool(sapi_hindi),
+            "sapi_hindi_voice": sapi_hindi,
+            "can_synthesize_hindi": piper_avail or bool(sapi_hindi),
+        }
+
+    def synthesize_scenes(self, project_id: str, scenes: list[SceneSpec]) -> dict[str, Any]:
         """Synthesize per-scene WAVs, stitch into narration_full.wav, and generate quality reports."""
         t0 = time.perf_counter()
         ffmpeg_exe = find_ffmpeg()
@@ -44,10 +84,23 @@ class PiperTTSEngine:
             raise RuntimeError("FFmpeg is required for TTS audio assembly.")
 
         use_piper = self.is_piper_available()
-        engine_name = "piper_hi_IN-pratham-medium" if use_piper else "windows_sapi_fallback"
-        model_license = "MIT (rhasspy/piper-voices hi_IN-pratham-medium)" if use_piper else "Windows Built-in SAPI"
+        sapi_hindi = self.get_installed_sapi_hindi_voice()
 
-        pron_reports: list[dict] = []
+        # Strict check: NEVER silently fall back to English SAPI voice for Hindi content
+        if not use_piper and not sapi_hindi:
+            raise RuntimeError(
+                "No suitable Hindi voice engine found. Piper Hindi model is missing and no Windows SAPI Hindi voice is installed. "
+                "Cannot synthesize Hindi narration without acceptable voice engine; project must pause in WAITING_FOR_VOICE."
+            )
+
+        if use_piper:
+            engine_name = "piper_hi_IN-pratham-medium"
+            model_license = "MIT (rhasspy/piper-voices hi_IN-pratham-medium)"
+        else:
+            engine_name = f"windows_sapi_hindi_{sapi_hindi}"
+            model_license = "Windows SAPI Hindi Voice"
+
+        pron_reports: list[dict[str, Any]] = []
         raw_seg_wavs: list[Path] = []
         seg_durations: list[float] = []
 
@@ -60,10 +113,12 @@ class PiperTTSEngine:
                 try:
                     self._run_piper(spoken_text, seg_wav)
                 except Exception:
-                    engine_name = "windows_sapi_fallback"
-                    self._run_sapi(scene.narration_text, seg_wav)
+                    if sapi_hindi:
+                        self._run_sapi(scene.narration_text, seg_wav, voice_name=sapi_hindi)
+                    else:
+                        raise
             else:
-                self._run_sapi(scene.narration_text, seg_wav)
+                self._run_sapi(scene.narration_text, seg_wav, voice_name=sapi_hindi)
 
             metrics = self.audio_proc._measure_audio(ffmpeg_exe, seg_wav)
             seg_durations.append(metrics["duration_sec"])
@@ -100,7 +155,6 @@ class PiperTTSEngine:
             text=True,
         )
 
-        # Also copy to narration_clean.wav for VideoRenderer compatibility
         clean_wav = self.proc_dir / "narration_clean.wav"
         clean_wav.write_bytes(full_wav.read_bytes())
 
@@ -146,10 +200,12 @@ class PiperTTSEngine:
 
     def _run_piper(self, text: str, out_wav: Path) -> None:
         script = (
-            "import sys, wave; from piper.voice import PiperVoice; "
-            "v = PiperVoice.load(sys.argv[1]); "
-            "txt = sys.stdin.read(); "
-            "with wave.open(sys.argv[2], 'wb') as wf: v.synthesize_wav(txt, wf)"
+            "import sys, wave\n"
+            "from piper.voice import PiperVoice\n"
+            "v = PiperVoice.load(sys.argv[1])\n"
+            "txt = sys.stdin.read()\n"
+            "with wave.open(sys.argv[2], 'wb') as wf:\n"
+            "    v.synthesize_wav(txt, wf)\n"
         )
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         subprocess.run(
@@ -165,10 +221,12 @@ class PiperTTSEngine:
         )
 
     @staticmethod
-    def _run_sapi(text: str, out_wav: Path) -> None:
+    def _run_sapi(text: str, out_wav: Path, voice_name: str | None = None) -> None:
+        voice_select = f"$s.SelectVoice('{voice_name}'); " if voice_name else ""
         ps = (
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+            f"{voice_select}"
             f"$s.SetOutputToWaveFile('{str(out_wav)}'); "
             "$txt = [Console]::In.ReadToEnd(); "
             "$s.Speak($txt); $s.Dispose()"

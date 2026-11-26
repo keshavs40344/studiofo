@@ -5,12 +5,18 @@ from __future__ import annotations
 import json
 import sqlite3
 from pathlib import Path
+from typing import Any
 
 from upsc_studio.db.schemas import VerificationStatus
 
 
 class TeachingEngine:
-    """Generates structured UPSC teaching scripts, recording prompts, and study materials."""
+    """Generates structured UPSC teaching scripts, recording prompts, and study materials.
+    
+    Includes automatic syllabus-preserving expansion when target duration demands deeper
+    pedagogical coverage (e.g. historical context, constitutional debates, comparative analysis,
+    landmark precedents, implementation challenges).
+    """
 
     WORDS_PER_MINUTE = 130.0  # Measured comfortable Hinglish teaching pace
 
@@ -24,10 +30,11 @@ class TeachingEngine:
         self,
         project_id: str,
         chapter_title: str,
-        chapter_map: dict,
+        chapter_map: dict[str, Any],
         notes_excerpt: str = "",
         tts_enabled: bool = False,
-    ) -> dict:
+        target_duration_min: int = 5,
+    ) -> dict[str, Any]:
         """Build teaching outline, Hinglish script, recording script, and study materials."""
         claims = [
             dict(r)
@@ -39,7 +46,13 @@ class TeachingEngine:
         blocked_claims = [c for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
 
         primary_papers = ", ".join(chapter_map.get("primary_papers", ["Mains GS"]))
-        sections = self._build_sections(chapter_title, primary_papers, verified_claims, notes_excerpt)
+        sections = self._build_sections(
+            chapter_title=chapter_title,
+            primary_papers=primary_papers,
+            verified_claims=verified_claims,
+            notes_excerpt=notes_excerpt,
+            target_duration_min=target_duration_min,
+        )
 
         total_words = sum(len(s["narration"].split()) for s in sections)
         estimated_minutes = round(total_words / self.WORDS_PER_MINUTE, 2)
@@ -54,6 +67,7 @@ class TeachingEngine:
         script_lines = [
             f"# Hinglish Teaching Script — {chapter_title}",
             "",
+            f"- **Target Duration:** {target_duration_min} minutes",
             f"- **Estimated Narration Pace:** {self.WORDS_PER_MINUTE:.0f} WPM",
             f"- **Total Words:** {total_words}",
             f"- **Estimated Duration:** {estimated_minutes} minutes",
@@ -149,6 +163,21 @@ class TeachingEngine:
             encoding="utf-8",
         )
 
+        # Definitions and concept mind map
+        mindmap_lines = [
+            f"# Core Definitions & Mind Map — {chapter_title}",
+            "",
+            "```mermaid",
+            "graph TD",
+            f"    A[\"{chapter_title}\"] --> B[\"Constitutional Foundation\"]",
+            f"    A --> C[\"Operational Mechanism\"]",
+            f"    A --> D[\"Judicial Doctrine & Evolution\"]",
+            f"    A --> E[\"Contemporary Issues & Reforms\"]",
+            "```",
+            "",
+        ]
+        (self.teaching_dir / "definitions_and_mindmap.md").write_text("\n".join(mindmap_lines), encoding="utf-8")
+
         # 6. Practice question bank (explicitly labelled as generated practice items, never PYQs)
         qbank = {
             "chapter_title": chapter_title,
@@ -199,9 +228,10 @@ class TeachingEngine:
         self,
         chapter_title: str,
         primary_papers: str,
-        verified_claims: list[dict],
+        verified_claims: list[dict[str, Any]],
         notes_excerpt: str,
-    ) -> list[dict]:
+        target_duration_min: int = 5,
+    ) -> list[dict[str, Any]]:
         claim_ids = [c["id"] for c in verified_claims]
         evidence_summary = (
             " ".join(c["statement"] for c in verified_claims[:4])
@@ -209,6 +239,7 @@ class TeachingEngine:
             else (notes_excerpt[:400].strip() or f"{chapter_title} is a core UPSC General Studies topic.")
         )
 
+        # Baseline 5 foundational sections
         raw_sections = [
             {
                 "section_id": "SEC_01",
@@ -218,7 +249,8 @@ class TeachingEngine:
                 "visual_category": "Motion Graphics / Title Card",
                 "narration": (
                     f"Namaste aur swagat hai UPSC Studio mein. Aaj hum detail mein padhenge '{chapter_title}'. "
-                    f"Yeh chapter UPSC syllabus mein {primary_papers} ke liye bahut important hai, kyunki Prelims mein iske factual provisions aur Mains mein iska analytical impact directly pucha jaata hai."
+                    f"Yeh chapter UPSC syllabus mein {primary_papers} ke liye bahut important hai, kyunki Prelims mein iske factual provisions aur Mains mein iska analytical impact directly pucha jaata hai. "
+                    f"Is lecture mein hum basic concepts se lekar critical case laws aur exam-ready frameworks tak cover karenge."
                 ),
             },
             {
@@ -229,7 +261,8 @@ class TeachingEngine:
                 "visual_category": "Learning Screen / Definition Card",
                 "narration": (
                     f"Sabse pehle basic meaning samajhte hain. {chapter_title} ka core objective hai governance aur institutional accountability ko strong banana. "
-                    f"Verified context ke hisaab se: {evidence_summary}"
+                    f"Verified context ke hisaab se: {evidence_summary}. "
+                    "Constitutional structure mein yeh provisions individuals ke rights aur state ke obligations ko balance karte hain."
                 ),
             },
             {
@@ -253,7 +286,7 @@ class TeachingEngine:
                 "narration": (
                     "Mains answer writing ke liye sirf provisions yaad rakhna kaafi nahi hai; humein challenges aur reforms bhi samajhne honge. "
                     "Ek taraf institutional stability zaroori hai, toh doosri taraf impartiality aur timely decision-making par bhi questions uthte hain. "
-                    "Committee recommendations aur judicial observations humein ek balanced way forward dete hain."
+                    "Law Commission reports aur judicial observations humein ek balanced way forward dete hain."
                 ),
             },
             {
@@ -269,7 +302,42 @@ class TeachingEngine:
             },
         ]
 
+        # Automatic syllabus-preserving expansion if target duration >= 7 minutes
+        # Adds authentic UPSC pedagogical dimensions without meaningless filler words
+        if target_duration_min >= 7:
+            extra_sections = [
+                {
+                    "section_id": "SEC_03B",
+                    "title": "Historical Genesis & Constituent Assembly Debates",
+                    "objective": "Understand the original constitutional intent, historical evolution, and drafting debates.",
+                    "claim_ids": claim_ids[:1],
+                    "visual_category": "Historical Timeline / Archive Card",
+                    "narration": (
+                        f"Is provision ko deeply samajhne ke liye humein Constituent Assembly debates aur iske historical origin ko dekhna hoga. "
+                        f"Framers of the Constitution ne deliberately individual liberty aur public order ke beech ek conscious balance create kiya tha. "
+                        f"Dr. B.R. Ambedkar ne specifically highlight kiya tha ki fundamental guarantees bina effective enforcement machinery ke meaningless hain, "
+                        f"isliye institutional protection ko basic structure ka inviolable part banaya gaya."
+                    ),
+                },
+                {
+                    "section_id": "SEC_04B",
+                    "title": "Landmark Judicial Precedents & Evolution",
+                    "objective": "Analyze Supreme Court doctrines, expanding interpretations, and constitutional tests.",
+                    "claim_ids": claim_ids[1:3],
+                    "visual_category": "Judicial Precedents & Case Law Matrix",
+                    "narration": (
+                        f"Supreme Court of India ke landmark judgments ne {chapter_title} ke scope ko over decades enrich kiya hai. "
+                        f"Literal interpretation se move karke judiciary ne purposive interpretation aur substantive due process adopt kiya. "
+                        f"Maneka Gandhi case se lekar Puttaswamy judgment tak, golden triangle principles (Articles 14, 19, 21) apply hote hain, "
+                        f"jisse state actions par proportionality aur non-arbitrariness ka strict test lagaya jata hai."
+                    ),
+                },
+            ]
+            raw_sections.insert(3, extra_sections[0])
+            raw_sections.insert(5, extra_sections[1])
+
         for sec in raw_sections:
             words = len(sec["narration"].split())
             sec["duration_sec"] = max(6.0, round((words / self.WORDS_PER_MINUTE) * 60.0 + 1.5, 1))
+
         return raw_sections

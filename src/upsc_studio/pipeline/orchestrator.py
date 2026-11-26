@@ -108,6 +108,7 @@ class ChapterPipeline:
             chapter_map=chapter_map,
             notes_excerpt=combined_notes,
             tts_enabled=project.tts_enabled,
+            target_duration_min=project.target_duration_min,
         )
         duration_schedule = DurationPlanner(teaching_engine.WORDS_PER_MINUTE).build_schedule(
             project_dir=project_dir,

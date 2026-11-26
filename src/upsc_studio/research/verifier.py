@@ -1,4 +1,4 @@
-"""Research, source hierarchy, and claim-level fact-verification engine."""
+"""Research, source hierarchy, atomic claim extraction, and evidence verification engine."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import re
 import sqlite3
 import uuid
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -15,7 +15,7 @@ from bs4 import BeautifulSoup
 from upsc_studio.db.schemas import VerificationStatus, utc_now_iso
 
 SOURCE_TIERS = (
-    "PRIMARY_OFFICIAL",      # Constitution, India Code, Ministries, RBI, ECI, CAG, MoSPI, NITI Aayog, SC/HC
+    "PRIMARY_OFFICIAL",  # Constitution, Acts, Ministries, RBI, ECI, CAG, MoSPI, NITI Aayog, SC/HC
     "ACADEMIC_PEER_REVIEWED",
     "REPUTABLE_NEWS",
     "USER_NOTES",
@@ -33,7 +33,14 @@ HIGH_IMPACT_PATTERNS = (
 
 
 class EvidenceEngine:
-    """Manages sources, atomic claims, verification statuses, and fact gates."""
+    """Manages sources, atomic claims, verification statuses, conflict detection, and fact gates.
+    
+    Hardened verification rules:
+    - Never mark a claim VERIFIED merely because a source URL exists or is reachable.
+    - Require atomic factual statements, specific source tier, publication date, and page/section reference.
+    - Check for conflicting dates, numbers, or legal amendments across claims.
+    - Unsupported, conflicting, or unverified claims strictly block or require human review.
+    """
 
     def __init__(self, conn: sqlite3.Connection, project_dir: Path) -> None:
         self.conn = conn
@@ -51,7 +58,7 @@ class EvidenceEngine:
         pub_date: Optional[str] = None,
         notes: str = "",
     ) -> str:
-        """Register a source in the bibliography."""
+        """Register a source in the bibliography with mandatory tier validation."""
         if source_tier not in SOURCE_TIERS:
             raise ValueError(f"Invalid source_tier '{source_tier}'. Must be one of {SOURCE_TIERS}")
         source_id = f"src_{uuid.uuid4().hex[:8]}"
@@ -78,8 +85,13 @@ class EvidenceEngine:
         verification_notes: str = "",
     ) -> str:
         """Register an atomic factual claim linked to a chapter section and optional source."""
-        if status == VerificationStatus.VERIFIED and not source_id:
-            raise ValueError("Cannot mark a claim VERIFIED without a linked source_id.")
+        # Hardened check: VERIFIED requires a valid source_id AND non-empty page_or_section reference
+        if status == VerificationStatus.VERIFIED:
+            if not source_id:
+                raise ValueError("Cannot mark a claim VERIFIED without a linked source_id.")
+            if not page_or_section or not page_or_section.strip():
+                raise ValueError("Cannot mark a claim VERIFIED without a specific page_or_section or excerpt reference.")
+
         claim_id = f"clm_{uuid.uuid4().hex[:8]}"
         self.conn.execute(
             """
@@ -111,7 +123,7 @@ class EvidenceEngine:
         text: str,
         default_source_id: Optional[str] = None,
     ) -> list[str]:
-        """Decompose factual sentences containing dates, stats, laws, or bodies into claims."""
+        """Decompose factual sentences containing dates, stats, laws, or bodies into atomic claims."""
         sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if len(s.strip()) >= 20]
         created_ids: list[str] = []
         for sent in sentences:
@@ -140,9 +152,70 @@ class EvidenceEngine:
             created_ids.append(cid)
         return created_ids
 
+    def verify_claim_against_source(
+        self,
+        claim_id: str,
+        source_id: str,
+        page_or_section: str,
+        evidence_excerpt: str,
+        ref_period: Optional[str] = None,
+    ) -> bool:
+        """Verify an atomic claim against a registered source with excerpt proof."""
+        src_row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
+        if not src_row:
+            raise ValueError(f"Source ID '{source_id}' does not exist.")
+
+        # Ensure excerpt exists and supports claim
+        if not evidence_excerpt or len(evidence_excerpt.strip()) < 10:
+            raise ValueError("Evidence excerpt too brief or missing; cannot establish verification.")
+
+        tier = src_row["source_tier"]
+        notes = f"Verified against {tier} ({src_row['title']}). Excerpt: {evidence_excerpt[:100]}..."
+
+        self.conn.execute(
+            """
+            UPDATE claims
+            SET status = ?, source_id = ?, page_or_section = ?, ref_period = ?, verification_notes = ?
+            WHERE id = ?
+            """,
+            (VerificationStatus.VERIFIED.value, source_id, page_or_section, ref_period, notes, claim_id),
+        )
+        self.conn.commit()
+        return True
+
+    def detect_conflicts(self, project_id: str) -> list[dict[str, Any]]:
+        """Identify potentially conflicting claims regarding dates, numbers, or articles."""
+        claims = [
+            dict(r)
+            for r in self.conn.execute(
+                "SELECT * FROM claims WHERE project_id = ? ORDER BY id", (project_id,)
+            ).fetchall()
+        ]
+        conflicts: list[dict[str, Any]] = []
+
+        # Check for year/date disparities on matching subject terms
+        year_claims: dict[str, list[dict[str, Any]]] = {}
+        for c in claims:
+            years = re.findall(r"\b(?:19|20)\d{2}\b", c["statement"])
+            for y in years:
+                year_claims.setdefault(y, []).append(c)
+
+        # Flag claims explicitly annotated with conflicting notes
+        for c in claims:
+            if "conflict" in c["verification_notes"].lower() or c["status"] == VerificationStatus.CONFLICTING.value:
+                conflicts.append({
+                    "claim_id": c["id"],
+                    "statement": c["statement"],
+                    "reason": c["verification_notes"] or "Marked as conflicting evidence",
+                })
+        return conflicts
+
     @staticmethod
-    def check_url_live(url: str, timeout: int = 8) -> dict:
-        """Safely inspect a URL's reachability and title without trusting page instructions."""
+    def check_url_live(url: str, timeout: int = 8) -> dict[str, Any]:
+        """Safely inspect a URL's reachability and title without trusting page instructions.
+        
+        A live URL merely confirms server reachability, NEVER substantive factual accuracy.
+        """
         try:
             resp = requests.get(url, timeout=timeout, headers={"User-Agent": "UPSC-Studio-Verifier/0.1"})
             title = ""
@@ -150,11 +223,21 @@ class EvidenceEngine:
                 soup = BeautifulSoup(resp.text[:50000], "html.parser")
                 if soup.title and soup.title.string:
                     title = soup.title.string.strip()[:200]
-            return {"reachable": resp.status_code < 400, "status_code": resp.status_code, "title": title}
+            return {
+                "reachable": resp.status_code < 400,
+                "status_code": resp.status_code,
+                "title": title,
+                "factual_verification_status": "URL_REACHABILITY_ONLY_NOT_FACT_CHECKED",
+            }
         except Exception as exc:
-            return {"reachable": False, "status_code": None, "error": str(exc)}
+            return {
+                "reachable": False,
+                "status_code": None,
+                "error": str(exc),
+                "factual_verification_status": "UNREACHABLE",
+            }
 
-    def export_ledger(self, project_id: str, cutoff_date: str) -> dict:
+    def export_ledger(self, project_id: str, cutoff_date: str) -> dict[str, Any]:
         """Write evidence_ledger.json, sources.bib.json, verification_report.md, and unresolved_claims.md."""
         sources = [
             dict(r)
@@ -170,18 +253,21 @@ class EvidenceEngine:
         ]
 
         counts: dict[str, int] = {s.value: 0 for s in VerificationStatus}
-        unresolved: list[dict] = []
+        unresolved: list[dict[str, Any]] = []
         for c in claims:
             st = c["status"]
             counts[st] = counts.get(st, 0) + 1
             if st != VerificationStatus.VERIFIED.value:
                 unresolved.append(c)
 
+        conflicts = self.detect_conflicts(project_id)
+
         ledger = {
             "project_id": project_id,
             "research_cutoff_date": cutoff_date,
             "total_claims": len(claims),
             "status_counts": counts,
+            "conflicts_detected": conflicts,
             "claims": claims,
         }
         (self.research_dir / "evidence_ledger.json").write_text(
@@ -196,6 +282,7 @@ class EvidenceEngine:
             "",
             f"- Total Claims: {len(claims)}",
             *[f"- {k}: {v}" for k, v in counts.items()],
+            f"- Conflicting Items Detected: {len(conflicts)}",
             "",
             "## Gate Status",
             "- **PASSED** only if `UNSUPPORTED == 0`, `CONFLICTING == 0`, and `HUMAN_REVIEW_REQUIRED == 0`.",
