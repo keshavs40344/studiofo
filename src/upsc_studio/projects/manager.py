@@ -19,8 +19,8 @@ class ProjectManager:
     """Owns project records and their on-disk workspace directories.
 
     Project files are stored below the configured projects root. Backups contain
-    a versioned project manifest and project-relative files; they never embed the
-    SQLite database itself.
+    a versioned manifest, project-relative files and only the SQLite rows owned
+    by that project (plus referenced syllabus catalogue rows), never the full DB.
     """
 
     BACKUP_FORMAT = "upsc-studio-project"
@@ -271,6 +271,44 @@ class ProjectManager:
                     sql += f' ON CONFLICT("id") DO UPDATE SET {", ".join(updates)}'
                 self.conn.execute(sql, tuple(row[name] for name in columns))
 
+    @staticmethod
+    def _remap_project_artifact_paths(
+        snapshot: dict[str, Any],
+        old_project_root: Path,
+        new_project_root: Path,
+    ) -> dict[str, Any]:
+        """Rebase stored artifact paths when a project is restored elsewhere."""
+        old_root = Path(old_project_root).expanduser().resolve()
+        new_root = Path(new_project_root).expanduser().resolve()
+        path_columns = {
+            "source_documents": ("original_path",),
+            "assets": ("file_path",),
+            "render_jobs": ("output_path",),
+        }
+        remapped = dict(snapshot)
+        for table, columns in path_columns.items():
+            rows = snapshot.get(table, [])
+            if not isinstance(rows, list):
+                continue
+            updated_rows = []
+            for original in rows:
+                row = dict(original)
+                for column in columns:
+                    value = row.get(column)
+                    if not value:
+                        continue
+                    try:
+                        original_path = Path(value).expanduser().resolve()
+                        relative = original_path.relative_to(old_root)
+                    except (OSError, ValueError):
+                        # Leave externally managed files untouched; only rebase
+                        # paths that were actually inside the original workspace.
+                        continue
+                    row[column] = str(new_root / relative)
+                updated_rows.append(row)
+            remapped[table] = updated_rows
+        return remapped
+
     def backup_project(
         self,
         project_id: str,
@@ -436,8 +474,14 @@ class ProjectManager:
                     utc_now_iso(),
                 ),
             )
+            database_snapshot = manifest.get("database", {})
+            if database_snapshot:
+                old_root = Path(project_data.get("root_dir", project_dir))
+                database_snapshot = self._remap_project_artifact_paths(
+                    database_snapshot, old_root, project_dir
+                )
             self._restore_project_database(
-                restored_record.id, manifest.get("database", {})
+                restored_record.id, database_snapshot
             )
             self.conn.commit()
             return self.get_project(restored_record.id)
