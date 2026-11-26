@@ -474,7 +474,10 @@ class ExecutiveProducer:
             "editorial_and_shorts": (
                 context.get("editorial") or editorial_output
             ),
-            "youtube_publish": context.get("youtube_publish") or publication_output,
+            "youtube_publish": context.get("youtube_publish") or {
+                **publication_output,
+                "status": publication_output.get("publisher_status", publication_output.get("status", "UNKNOWN")),
+            },
             "workflow": {
                 "workflow_id": workflow_id,
                 "status": workflow.get("status"),
