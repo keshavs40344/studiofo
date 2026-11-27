@@ -38,6 +38,7 @@ from upsc_studio.teaching.duration_planner import DurationPlanner
 from upsc_studio.teaching.engine import TeachingEngine
 from upsc_studio.tts.adapter import PiperTTSEngine
 from upsc_studio.video.renderer import VideoRenderer
+from upsc_studio.video.shorts import ShortsRenderer
 
 
 PIPELINE_STAGE_VERSION = "chapter-stages-v1"
@@ -566,16 +567,35 @@ class StagedChapterPipeline:
             fps=hardware.recommended_fps, resolution=hardware.recommended_resolution,
         )
         project = self.project_mgr.get_project(project_id)
+        shorts_candidates = ShortsRenderer.build_candidates(scenes, project.chapter_title)
+        shorts_manifest = ShortsRenderer(project_dir).render(
+            project_id=project_id,
+            candidates=shorts_candidates,
+            scenes=scenes,
+            narration_wav=narration,
+            subtitles_srt=subtitles,
+            preset=hardware.recommended_preset,
+            fps=hardware.recommended_fps,
+        )
         sections = teaching["teaching_summary"]["sections"]
         duration = DurationPlanner(TeachingEngine.WORDS_PER_MINUTE).build_schedule(
             project_dir=project_dir, sections=sections,
             target_duration_min=project.target_duration_min,
             actual_rendered_sec=voice["audio_report"].get("duration_sec"),
         )
-        report = {"render_manifest": manifest, "duration_schedule": duration}
+        report = {
+            "render_manifest": manifest,
+            "shorts_manifest": shorts_manifest,
+            "duration_schedule": duration,
+        }
         _write_json(paths["render"], report)
-        return {"status": "COMPLETED", "artifact": str(paths["render"]),
-                "final_video": manifest.get("final_video")}
+        return {
+            "status": "COMPLETED",
+            "artifact": str(paths["render"]),
+            "final_video": manifest.get("final_video"),
+            "shorts_rendered": shorts_manifest.get("rendered_count", 0),
+            "shorts_status": shorts_manifest.get("status"),
+        }
 
     def _stage_qa(self, project_id: str, project_dir: Path, paths: dict[str, Path]) -> dict[str, Any]:
         scenes = self._scene_specs(project_dir)
@@ -791,6 +811,7 @@ class StagedChapterPipeline:
             "recording_script": teaching.get("recording_script"),
             "audio_report": voice.get("audio_report"),
             "render_manifest": render.get("render_manifest"),
+            "shorts_manifest": render.get("shorts_manifest"),
             "qa": qa.get("qa") or voice.get("qa"),
             "ten_gates": qa.get("ten_gates") or voice.get("ten_gates"),
             "voice_wait_reason": voice.get("voice_wait_reason"),
