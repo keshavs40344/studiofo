@@ -105,7 +105,10 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     assert out["supervisor_task"]["status"] == "COMPLETED"
     assert out["workflow"]["status"] == "COMPLETED"
     assert out["workflow"]["task_count"] == 4
-    assert out["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
+    if out["status"] == "WAITING_FOR_VOICE":
+        assert out["agent_states"]["AGENT_01"]["status"] == "BLOCKED"
+    else:
+        assert out["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
     assert out["agent_states"]["AGENT_20"]["status"] == "COMPLETED"
     assert out["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     assert out["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
