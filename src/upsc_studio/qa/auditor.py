@@ -142,6 +142,39 @@ class QAAuditor:
         if external_source_count == 0:
             blockers.append("No non-user research source with a URL is recorded.")
 
+        if content_category == "current_affairs":
+            project_cutoff = self.conn.execute(
+                "SELECT cutoff_date FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()["cutoff_date"]
+            dated_sources = self.conn.execute(
+                """
+                SELECT id, title, pub_date FROM sources
+                WHERE project_id = ? AND source_tier <> 'USER_NOTES'
+                ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+            invalid_dates: list[str] = []
+            try:
+                cutoff = date.fromisoformat(project_cutoff)
+            except (TypeError, ValueError):
+                cutoff = None
+                blockers.append("Current Affairs research cutoff must be a valid ISO date.")
+            for source in dated_sources:
+                try:
+                    published = date.fromisoformat(source["pub_date"]) if source["pub_date"] else None
+                except ValueError:
+                    published = None
+                if published is None:
+                    invalid_dates.append(source["id"])
+                elif cutoff and published > cutoff:
+                    invalid_dates.append(source["id"])
+            if invalid_dates:
+                blockers.append(
+                    "Current Affairs sources need a valid publication date on or before the project cutoff: "
+                    + ", ".join(invalid_dates[:8])
+                )
+
         common_required_files = (
             "teaching/script_hinglish.md",
             "teaching/study_notes.md",
