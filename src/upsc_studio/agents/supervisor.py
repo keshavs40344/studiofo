@@ -249,11 +249,15 @@ class ExecutiveProducer:
                 }
 
             qa = production.get("qa") or {}
+            ten_gates = production.get("ten_gates") or {}
             qa_passed = (
                 production.get("pipeline_status") == "APPROVED"
                 and qa.get("academic", {}).get("status") == "PASSED"
                 and qa.get("rights", {}).get("status") == "PASSED"
                 and qa.get("media", {}).get("status") == "PASSED"
+                and ten_gates.get("all_gates_passed") is True
+                and not ten_gates.get("failed_gates")
+                and not ten_gates.get("pending_gates")
             )
             if not qa_passed:
                 return {
