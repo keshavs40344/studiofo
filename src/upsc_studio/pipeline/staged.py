@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import shutil
 import sqlite3
 from pathlib import Path
@@ -32,6 +33,7 @@ from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.auditor import QAAuditor
 from upsc_studio.qa.ten_gates import TenGateAuditor
 from upsc_studio.research.verifier import EvidenceEngine
+from upsc_studio.research.discovery import ResearchDiscovery
 from upsc_studio.storyboard.director import StoryboardDirector
 from upsc_studio.syllabus.engine import SyllabusEngine
 from upsc_studio.teaching.duration_planner import DurationPlanner
@@ -388,11 +390,47 @@ class StagedChapterPipeline:
                 text=notes,
                 default_source_id=source_id,
             )
+        discovery_report: dict[str, Any] = {
+            "status": "AUTO_RESEARCH_DISABLED",
+            "registered_count": 0,
+            "fact_checking": "NOT_PERFORMED",
+        }
+        if os.getenv("UPSC_STUDIO_AUTO_RESEARCH", "1").strip().lower() not in {"0", "false", "no"}:
+            category_query = {
+                "upsc": "UPSC India constitutional law official report research",
+                "general_knowledge": "India general knowledge authoritative reference",
+                "current_affairs": "India current affairs policy report",
+                "deep_dive": "India research academic study",
+            }.get(project.content_category, "India research")
+            try:
+                discovery_report = ResearchDiscovery(evidence).discover(
+                    project_id=project_id,
+                    query=f"{project.chapter_title} {category_query}",
+                    limit=5,
+                    cutoff_date=project.cutoff_date if project.content_category == "current_affairs" else None,
+                    require_dated_sources=project.content_category == "current_affairs",
+                )
+            except Exception as exc:
+                discovery_report = {
+                    "status": "DISCOVERY_ERROR",
+                    "registered_count": 0,
+                    "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+                    "fact_checking": "NOT_PERFORMED",
+                }
         ledger = evidence.export_ledger(project_id, project.cutoff_date)
-        report = {"chapter_map": chapter_map, "evidence_summary": ledger["status_counts"]}
+        report = {
+            "chapter_map": chapter_map,
+            "evidence_summary": ledger["status_counts"],
+            "research_discovery": discovery_report,
+        }
         _write_json(paths["academic"], report)
-        return {"status": "COMPLETED", "artifact": str(paths["academic"]),
-                "evidence_summary": ledger["status_counts"]}
+        return {
+            "status": "COMPLETED",
+            "artifact": str(paths["academic"]),
+            "evidence_summary": ledger["status_counts"],
+            "research_candidates": discovery_report.get("registered_count", 0),
+            "research_discovery_status": discovery_report.get("status"),
+        }
 
     def _stage_teaching(self, project_id: str, project_dir: Path, paths: dict[str, Path],
                         chapter_map: dict[str, Any]) -> dict[str, Any]:
@@ -807,6 +845,7 @@ class StagedChapterPipeline:
             "ingested_docs": ingestion.get("ingested_count", 0),
             "chapter_map": academic.get("chapter_map", {}),
             "evidence_summary": academic.get("evidence_summary", {}),
+            "research_discovery": academic.get("research_discovery", {}),
             "scenes_count": visuals.get("scenes_count", 0),
             "recording_script": teaching.get("recording_script"),
             "audio_report": voice.get("audio_report"),
