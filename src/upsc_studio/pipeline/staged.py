@@ -380,7 +380,16 @@ class StagedChapterPipeline:
         render_fp = _fingerprint({"visuals": visuals_fp, "voice": voice_fp,
                                   "preset": hardware.recommended_preset, "fps": hardware.recommended_fps,
                                   "resolution": hardware.recommended_resolution})
-        qa_fp = _fingerprint({"academic": academic_fp, "render": render_fp, "qa_schema": PIPELINE_STAGE_VERSION})
+        manual_review_path = project_dir / "qa" / "manual_review.json"
+        manual_review_sha256 = (
+            sha256_file(manual_review_path) if manual_review_path.is_file() else None
+        )
+        qa_fp = _fingerprint({
+            "academic": academic_fp,
+            "render": render_fp,
+            "manual_review_sha256": manual_review_sha256,
+            "qa_schema": PIPELINE_STAGE_VERSION,
+        })
 
         handlers = {
             "pipeline_ingestion": lambda payload: self._stage_ingestion(
