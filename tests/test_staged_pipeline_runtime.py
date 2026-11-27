@@ -8,6 +8,7 @@ from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import ProjectCreate, ProjectStatus
 from upsc_studio.pipeline.staged import StagedChapterPipeline
 from upsc_studio.projects.manager import ProjectManager
+from upsc_studio.research.verifier import EvidenceEngine
 
 
 def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
@@ -133,3 +134,22 @@ def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
     assert fourth["status"] == ProjectStatus.APPROVED.value
     assert calls == {"ingestion": 1, "academic": 1, "teaching": 1,
                      "visuals": 1, "voice": 2, "render": 1, "qa": 2}
+
+    # Newly registered external research invalidates academic and all dependent stages,
+    # while ingestion remains unchanged.
+    evidence = EvidenceEngine(conn, Path(project.root_dir))
+    source_id = evidence.add_source(
+        project.id, "External report", "Publisher", "OTHER",
+        url="https://example.org/report",
+    )
+    evidence.add_claim(
+        project.id, "A source-backed claim added after the first production pass.",
+        "Research", source_id=source_id,
+    )
+    fifth = pipeline.run_staged(
+        project.id, typed_notes="Federalism distributes constitutional powers.",
+        voice_path=recording,
+    )
+    assert fifth["status"] == ProjectStatus.APPROVED.value
+    assert calls == {"ingestion": 1, "academic": 2, "teaching": 2,
+                     "visuals": 2, "voice": 3, "render": 2, "qa": 3}
