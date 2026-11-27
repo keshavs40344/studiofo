@@ -33,6 +33,7 @@ class TeachingEngine:
         notes_excerpt: str = "",
         tts_enabled: bool = False,
         target_duration_min: int = 5,
+        content_category: str = "upsc",
     ) -> dict[str, Any]:
         """Build teaching outline, Hinglish script, recording script, and study materials."""
         claims = [
@@ -44,7 +45,16 @@ class TeachingEngine:
         verified_claims = [c for c in claims if c["status"] == VerificationStatus.VERIFIED.value]
         blocked_claims = [c for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
 
-        primary_papers = ", ".join(chapter_map.get("primary_papers", ["Mains GS"]))
+        category_labels = {
+            "upsc": "UPSC syllabus",
+            "general_knowledge": "General Knowledge",
+            "current_affairs": "Current Affairs",
+            "deep_dive": "Deep Dive",
+        }
+        if content_category not in category_labels:
+            raise ValueError(f"Unsupported content category: {content_category}")
+        papers_or_category = chapter_map.get("primary_papers") or [category_labels[content_category]]
+        primary_papers = ", ".join(papers_or_category)
         sections = self._build_sections(
             chapter_title=chapter_title,
             primary_papers=primary_papers,
@@ -65,6 +75,8 @@ class TeachingEngine:
         # 2. script_hinglish.md
         script_lines = [
             f"# Hinglish Teaching Script — {chapter_title}",
+            f"**Content Category:** {category_labels[content_category]}",
+
             "",
             f"- **Target Duration:** {target_duration_min} minutes",
             f"- **Estimated Narration Pace:** {self.WORDS_PER_MINUTE:.0f} WPM",
@@ -118,33 +130,72 @@ class TeachingEngine:
             )
         (self.teaching_dir / "recording_script.md").write_text("\n".join(rec_lines), encoding="utf-8")
 
-        # 4. Prelims & Mains separate tracks
-        prelims_lines = [
-            f"# Prelims Track — {chapter_title}",
-            "",
-            "## Source-Backed Factual Points (Only Claims Marked VERIFIED)",
-        ]
-        for c in verified_claims:
-            prelims_lines.append(f"- [{c['id']}] {c['statement']} (Ref: {c['page_or_section'] or 'verified source'})")
-        if not verified_claims:
-            prelims_lines.append("- Add and verify factual claims in Research & Verification before finalising Prelims facts.")
-        (self.teaching_dir / "prelims_track.md").write_text("\n".join(prelims_lines), encoding="utf-8")
+        # 4. Category-specific learning tracks
+        if content_category == "upsc":
+            prelims_lines = [
+                f"# Prelims Track — {chapter_title}",
+                "",
+                "## Source-Backed Factual Points (Only Claims Marked VERIFIED)",
+            ]
+            for claim in verified_claims:
+                prelims_lines.append(
+                    f"- [{claim['id']}] {claim['statement']} (Ref: {claim['page_or_section'] or 'verified source'})"
+                )
+            if not verified_claims:
+                prelims_lines.append("- Insufficient information: add and verify factual claims before finalising.")
+            (self.teaching_dir / "prelims_track.md").write_text(
+                "\n".join(prelims_lines), encoding="utf-8"
+            )
 
-        mains_lines = [
-            f"# Mains Analytical Track — {chapter_title}",
-            "",
-            "## Evidence-Led Answer Framework",
-            "- **Definition and scope:** Use a source-backed definition; do not infer missing details.",
-            "- **Context and mechanism:** Include only steps and institutions directly supported by reviewed sources.",
-            "- **Implications and debates:** Separate sourced facts from analysis; cite each factual example.",
-            "- **Limitations and reforms:** Include criticism, court cases, committees, and recommendations only when independently sourced and verified.",
-            "",
-            "## Practice Answer Structure (Framework, Not a Model Answer)",
-            "1. **Introduction:** Define the topic using verified material.",
-            "2. **Body:** Organise the available evidence into relevant dimensions; label evidence gaps.",
-            "3. **Conclusion:** Summarise supported findings without inventing a recommendation.",
-        ]
-        (self.teaching_dir / "mains_track.md").write_text("\n".join(mains_lines), encoding="utf-8")
+            mains_lines = [
+                f"# Mains Analytical Track — {chapter_title}",
+                "",
+                "## Evidence-Led Answer Framework",
+                "- **Definition and scope:** Use a source-backed definition; do not infer missing details.",
+                "- **Context and mechanism:** Include only steps and institutions directly supported by reviewed sources.",
+                "- **Implications and debates:** Separate sourced facts from analysis; cite each factual example.",
+                "- **Limitations and reforms:** Include cases, committees, and recommendations only when independently sourced and verified.",
+                "",
+                "## Practice Answer Structure (Framework, Not a Model Answer)",
+                "1. **Introduction:** Define the topic using verified material.",
+                "2. **Body:** Organise available evidence into relevant dimensions; label evidence gaps.",
+                "3. **Conclusion:** Summarise supported findings without inventing a recommendation.",
+            ]
+            (self.teaching_dir / "mains_track.md").write_text(
+                "\n".join(mains_lines), encoding="utf-8"
+            )
+        else:
+            topic_context = [
+                f"# {category_labels[content_category]} Topic Context — {chapter_title}",
+                "",
+                f"**Research cutoff:** {chapter_map.get('research_cutoff_date') or 'Not applicable'}",
+                "",
+                "Only statements linked to claims marked VERIFIED are included in the factual lesson.",
+                "This category does not use UPSC Prelims/Mains syllabus tracks.",
+                "",
+                *[
+                    f"- [{claim['id']}] {claim['statement']} (Ref: {claim['page_or_section'] or 'verified source'})"
+                    for claim in verified_claims
+                ],
+            ]
+            if not verified_claims:
+                topic_context.append("- Insufficient information: no verified factual claims are available.")
+            (self.teaching_dir / "topic_context.md").write_text(
+                "\n".join(topic_context), encoding="utf-8"
+            )
+            analysis_framework = [
+                f"# Analysis Framework — {chapter_title}",
+                "",
+                "This is a neutral organising framework, not evidence that each dimension applies.",
+                "1. Definitions and scope (source required).",
+                "2. Historical / institutional context (only where sourced).",
+                "3. Evidence, data and examples (cite and date each item).",
+                "4. Competing interpretations and limitations (source both sides).",
+                "5. Open questions and unresolved evidence gaps.",
+            ]
+            (self.teaching_dir / "analysis_framework.md").write_text(
+                "\n".join(analysis_framework), encoding="utf-8"
+            )
 
         # 5. Study notes & revision sheet
         (self.teaching_dir / "study_notes.md").write_text(
@@ -188,15 +239,8 @@ class TeachingEngine:
         (self.teaching_dir / "definitions_and_mindmap.md").write_text("\n".join(mindmap_lines), encoding="utf-8")
 
         # 6. Practice question bank (explicitly labelled as generated practice items, never PYQs)
-        qbank = {
-            "chapter_title": chapter_title,
-            "note": (
-                "No objective MCQ or official PYQ is fabricated. Verified PYQs must be imported "
-                "from an authenticated question source; generated questions require answer-key review."
-            ),
-            "prelims_practice_mcqs": [],
-            "mcq_generation_status": "NOT_GENERATED_INSUFFICIENT_AUTHENTICATED_QUESTION_DATA",
-            "mains_practice_questions": [
+        if content_category == "upsc":
+            practice_questions = [
                 {
                     "id": "MAINS_PROMPT_1",
                     "label": "PRACTICE_PROMPT_REVIEW_REQUIRED",
@@ -205,7 +249,28 @@ class TeachingEngine:
                         "in this chapter. Identify any unresolved evidence gaps."
                     ),
                 }
-            ],
+            ]
+        else:
+            practice_questions = [
+                {
+                    "id": "DISCUSSION_PROMPT_1",
+                    "label": "PRACTICE_PROMPT_REVIEW_REQUIRED",
+                    "question": (
+                        f"Summarise the source-backed findings on '{chapter_title}', distinguish "
+                        "facts from interpretation, and list unresolved evidence gaps."
+                    ),
+                }
+            ]
+        qbank = {
+            "content_category": content_category,
+            "chapter_title": chapter_title,
+            "note": (
+                "No objective MCQ or official PYQ is fabricated. Verified PYQs must be imported "
+                "from an authenticated question source; generated questions require answer-key review."
+            ),
+            "prelims_practice_mcqs": [],
+            "mcq_generation_status": "NOT_GENERATED_INSUFFICIENT_AUTHENTICATED_QUESTION_DATA",
+            "practice_prompts": practice_questions,
             "verified_pyqs": [],
         }
         (self.teaching_dir / "question_bank.json").write_text(
@@ -218,6 +283,7 @@ class TeachingEngine:
         )
 
         return {
+            "content_category": content_category,
             "sections_count": len(sections),
             "total_words": total_words,
             "estimated_duration_min": estimated_minutes,
