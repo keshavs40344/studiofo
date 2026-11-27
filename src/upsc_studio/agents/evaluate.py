@@ -263,5 +263,45 @@ def run_evaluation() -> int:
     return 0
 
 
+def run_evaluations(cases_path: Path | None = None) -> dict:
+    path = cases_path or Path(__file__).parent / "fixtures" / "agent_eval_cases.json"
+    if not path.exists():
+        return {"case_count": 0, "passed": 0, "failed": 0, "pass_rate": 1.0, "results": []}
+    from upsc_studio.agents.workers import default_worker_handlers
+    cases = json.loads(path.read_text(encoding="utf-8"))
+    handlers = default_worker_handlers()
+    results = []
+    for case in cases:
+        handler = handlers.get(case["worker"])
+        if handler is None:
+            actual = "ERROR"
+            detail = "unknown worker"
+        else:
+            try:
+                output = handler(case["input"])
+                actual = output.get("status", "MISSING_STATUS")
+                detail = output
+            except Exception as exc:
+                actual = "ERROR"
+                detail = f"{type(exc).__name__}: {exc}"
+        results.append({
+            "id": case["id"],
+            "expected": case["expected_status"],
+            "actual": actual,
+            "passed": actual == case["expected_status"],
+            "detail": detail,
+        })
+    passed = sum(item["passed"] for item in results)
+    return {"case_count": len(results), "passed": passed, "failed": len(results) - passed,
+            "pass_rate": passed / len(results) if results else 0.0, "results": results}
+
+
 if __name__ == "__main__":
-    sys.exit(run_evaluation())
+    exit_code = run_evaluation()
+    fixtures_path = Path(__file__).parent / "fixtures" / "agent_eval_cases.json"
+    if fixtures_path.exists():
+        fixture_report = run_evaluations(fixtures_path)
+        print(f"\nDeterministic Agent Cases: {fixture_report['passed']} / {fixture_report['case_count']} passed.")
+        if fixture_report["failed"] > 0:
+            exit_code = 1
+    sys.exit(exit_code)

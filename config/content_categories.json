@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "default_master_language": "hinglish",
+  "documentary_format": "documentary_teacher_hybrid",
+  "content_categories": [
+    {
+      "id": "upsc",
+      "label": "UPSC syllabus",
+      "requires": ["syllabus_mapping", "topic_map", "source_ledger", "coverage_audit"]
+    },
+    {
+      "id": "general_knowledge",
+      "label": "General knowledge",
+      "requires": ["topic_map", "source_ledger", "coverage_audit"]
+    },
+    {
+      "id": "current_affairs",
+      "label": "Current affairs",
+      "requires": ["topic_map", "source_ledger", "research_cutoff_date", "coverage_audit"]
+    },
+    {
+      "id": "deep_dive",
+      "label": "Standalone deep dive",
+      "requires": ["topic_map", "source_ledger", "coverage_audit"]
+    }
+  ],
+  "coverage_statuses": ["PASS", "REVIEW_REQUIRED", "FAIL"],
+  "publication_requires_human_approval": true
+}

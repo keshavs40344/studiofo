@@ -2,36 +2,53 @@ name: UPSC Studio CI
 
 on:
   push:
-    branches: [ main, "feature/**" ]
+    branches: ["main", "feature/**"]
   pull_request:
-    branches: [ main ]
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
 
-      - name: Install dependencies
+      - name: Install project and test dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e .
+          python -m pip install -e ".[dev]"
           pip install pytest pytest-asyncio requests beautifulsoup4
 
-      - name: Run Pytest Suite
-        env:
-          PYTHONPATH: src
+      - name: Validate JSON configuration
+        shell: pwsh
         run: |
-          python -m pytest -q
+          if (Test-Path config) {
+            Get-ChildItem -Path config -Filter *.json -Recurse | ForEach-Object {
+              Get-Content $_.FullName -Raw | ConvertFrom-Json | Out-Null
+            }
+          }
 
-      - name: Run 24 Specialist Agents & Runtime Evaluation
+      - name: Run test suite
         env:
           PYTHONPATH: src
-        run: |
-          python -m upsc_studio.agents.evaluate
+        run: python -m pytest -q
+
+      - name: Run 24 specialist agents and evaluation suite
+        env:
+          PYTHONPATH: src
+        run: python -m upsc_studio.agents.evaluate

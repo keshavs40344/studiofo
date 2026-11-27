@@ -46,9 +46,17 @@ class YouTubePublisher:
         qa_passed: bool,
         privacy_status: str = DEFAULT_PRIVACY_STATUS,
         human_approved_by: str | None = None,
+        user_approved: bool = False,
         default_language: str = "en",
     ) -> dict[str, Any]:
-        """Upload video via YouTube Data API v3 if OAuth is connected and QA passed; never fakes uploads."""
+        """Upload only after explicit per-run approval, QA pass, and OAuth connection."""
+        if not user_approved and not human_approved_by:
+            return {
+                "status": "BLOCKED_AWAITING_EXPLICIT_USER_APPROVAL",
+                "video_id": None,
+                "privacy_status": privacy_status,
+                "upload_attempted": False,
+            }
         if not qa_passed:
             return {
                 "status": "BLOCKED_QA_FAILED",
