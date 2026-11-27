@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import SceneSpec
 from upsc_studio.qa.ten_gates import TenGateAuditor
-from upsc_studio.web import app as web_module
+import upsc_studio.web.app as web_module
 from upsc_studio.web.app import create_app
 
 
