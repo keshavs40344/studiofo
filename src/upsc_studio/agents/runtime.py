@@ -199,7 +199,16 @@ class AgentTaskStore:
         if start_handler not in order:
             raise ValueError(f"Unknown pipeline handler: {start_handler}")
         rows = self.list_workflow(workflow_id)
-        target = next((row for row in rows if row["handler"] == start_handler), None)
+        latest_by_handler: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            handler = row["handler"]
+            current = latest_by_handler.get(handler)
+            if current is None or (
+                str(row.get("updated_at") or row.get("created_at") or "")
+                >= str(current.get("updated_at") or current.get("created_at") or "")
+            ):
+                latest_by_handler[handler] = row
+        target = latest_by_handler.get(start_handler)
         if target is None:
             raise ValueError(f"No persisted task exists for handler: {start_handler}")
         allowed_start = {"FAILED", "BLOCKED", "REVIEW_REQUIRED"}
@@ -212,8 +221,7 @@ class AgentTaskStore:
         handler_positions = {handler: index for index, handler in enumerate(order)}
         reset: list[str] = []
         now = _now()
-        for row in rows:
-            handler = row["handler"]
+        for handler, row in latest_by_handler.items():
             if handler not in handler_positions or handler_positions[handler] < handler_positions[start_handler]:
                 continue
             status = row["status"]
