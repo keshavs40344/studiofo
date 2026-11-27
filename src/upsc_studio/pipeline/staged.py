@@ -441,18 +441,11 @@ class StagedChapterPipeline:
             )
             matched_pyqs = PYQEngine().match_chapter(project.chapter_title)
         else:
-            category_labels = {
-                "general_knowledge": "General Knowledge",
-                "current_affairs": "Current Affairs",
-                "deep_dive": "Deep Dive",
-            }
-            specialist_key = f"{project.content_category.upper()}_EDITORIAL_PROFILE"
-            specialist_profile = {
-                "category": project.content_category,
-                "label": category_labels[project.content_category],
-                "exam_syllabus_mapping": "NOT_APPLICABLE",
-                "source_review_required": True,
-            }
+            from upsc_studio.universal.domain_engine import UniversalKnowledgeEngine
+            notes = paths["notes"].read_text(encoding="utf-8") if paths["notes"].is_file() else ""
+            specialist_key, specialist_profile = UniversalKnowledgeEngine().select_domain_profile(
+                project.chapter_title, project.content_category, notes
+            )
             matched_pyqs = []
         engine = TeachingEngine(self.conn, project_dir)
         notes = paths["notes"].read_text(encoding="utf-8") if paths["notes"].is_file() else ""
