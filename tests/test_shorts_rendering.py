@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from upsc_studio.db.schemas import SceneSpec
+from upsc_studio.video import shorts as shorts_module
 from upsc_studio.video.shorts import ShortsRenderer
 
 
