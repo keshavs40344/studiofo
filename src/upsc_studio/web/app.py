@@ -720,7 +720,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
     @app.get("/api/i18n/capabilities")
     def get_i18n_capabilities() -> dict:
         translation = TranslationService().capabilities()
-        models = PiperTTSEngine(resolved_projects).discover_piper_models()
+        models = PiperTTSEngine.inventory_piper_models()
         return {
             "translation": translation,
             "language_catalogue": [
