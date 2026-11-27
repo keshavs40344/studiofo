@@ -67,7 +67,7 @@ class ProjectCreate(BaseModel):
     chapter_title: str = Field(..., min_length=2, max_length=200)
     content_category: Literal["upsc", "general_knowledge", "current_affairs", "deep_dive"] = "upsc"
     exam_cycle: str = Field(default="UPSC CSE 2026")
-    cutoff_date: str = Field(default="2026-11-26")
+    cutoff_date: str = Field(default_factory=lambda: datetime.now().astimezone().date().isoformat())
     target_duration_min: int = Field(default=30, ge=1, le=180)
     tts_enabled: bool = Field(default=False)
 
