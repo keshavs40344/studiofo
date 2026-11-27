@@ -27,6 +27,11 @@ def test_attestation_endpoint_requires_excerpt_and_project_scope(tmp_path):
     )
 
     client = TestClient(create_app(db_path=db_path, projects_root=projects_root))
+    listed = client.get(f"/api/projects/{project.id}/claims")
+    assert listed.status_code == 200
+    assert listed.json()["total_claims"] == 1
+    assert listed.json()["claims"][0]["id"] == claim_id
+
     response = client.post(
         f"/api/projects/{project.id}/claims/{claim_id}/attest",
         json={
