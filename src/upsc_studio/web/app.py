@@ -530,7 +530,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         }
 
     @app.post("/api/projects/{project_id}/run")
-    async def run_project_pipeline(
+    def run_project_pipeline(
         project_id: str,
         typed_notes: str = Form(default=""),
         notes_file: Optional[UploadFile] = File(default=None),
