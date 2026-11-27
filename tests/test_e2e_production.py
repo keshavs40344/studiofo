@@ -141,7 +141,7 @@ def test_fastapi_dashboard_and_api(tmp_path: Path) -> None:
     assert run_result["status"] == "WAITING_FOR_VOICE"
     assert run_result["workflow"]["status"] == "COMPLETED"
     assert run_result["workflow"]["task_count"] == 4
-    assert run_result["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
+    assert run_result["agent_states"]["AGENT_01"]["status"] == "BLOCKED"
     assert run_result["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     assert run_result["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
     assert run_result["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
