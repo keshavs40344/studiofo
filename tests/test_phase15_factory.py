@@ -113,7 +113,7 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     assert out["agent_states"]["AGENT_20"]["status"] == "COMPLETED"
     assert out["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     assert out["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
-    assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
+    assert all(candidate["claim_ids"] for candidate in out["editorial_and_shorts"]["shorts_candidates"])\n    # Scenes without explicit claim links do not produce factual Shorts candidates.
 
     if out["status"] == "WAITING_FOR_VOICE":
         capabilities = out["voice_capabilities"]
