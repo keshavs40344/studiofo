@@ -125,6 +125,7 @@ def test_supervisor_persists_pipeline_and_reuses_it_when_only_publish_approval_c
         human_publish_approval=True,
     )
     assert second["workflow"]["status"] == "COMPLETED"
+    assert second["status"] == "APPROVED"
     assert second["youtube_publish"]["status"] == "UPLOADED"
     assert second["agent_states"]["AGENT_23"]["status"] == "COMPLETED"
     assert pipeline_calls["count"] == 1
