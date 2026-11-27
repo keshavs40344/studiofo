@@ -127,6 +127,28 @@ class ChapterPipeline:
             )
         evidence_ledger = evidence_engine.export_ledger(project_id, project.cutoff_date)
 
+        # Factual narration is blocked until every extracted claim has explicit reviewer attestation.
+        claim_count = int(evidence_ledger.get("total_claims", 0))
+        pending_claims = self.conn.execute(
+            "SELECT COUNT(*) AS cnt FROM claims WHERE project_id = ? AND status != 'VERIFIED'",
+            (project_id,),
+        ).fetchone()["cnt"]
+        if claim_count == 0 or pending_claims > 0:
+            self.project_mgr.update_status(project_id, ProjectStatus.WAITING_FOR_RESEARCH_REVIEW)
+            logger.info(
+                "Research review required: %s total claims, %s pending attestations.",
+                claim_count, pending_claims,
+            )
+            return {
+                "project_id": project_id,
+                "status": ProjectStatus.WAITING_FOR_RESEARCH_REVIEW.value,
+                "ingested_docs": len(ingested_docs),
+                "claims_count": claim_count,
+                "pending_claims_count": pending_claims,
+                "evidence_summary": evidence_ledger.get("status_counts", {}),
+                "next_action": "Inspect each original source and submit an excerpt attestation for every claim before running production again.",
+            }
+
         # 4. Specialist Profile, PYQs, Teaching Script & Duration Schedule
         specialist_key, specialist_profile = SpecialistProfileEngine().select_profile(
             project.chapter_title, chapter_map.get("primary_papers", [])
