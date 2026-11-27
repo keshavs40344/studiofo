@@ -237,6 +237,7 @@ class ExecutiveProducer:
             return {
                 "status": "FAILED" if result.get("status") == "FAILED" else "COMPLETED",
                 "project_id": project_id,
+                "content_category": result.get("content_category", project.content_category),
                 "pipeline_status": result.get("status", "UNKNOWN"),
                 "chapter_map": result.get("chapter_map", {}),
                 "publishing_package": result.get("publishing_package", {}),
