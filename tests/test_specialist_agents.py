@@ -35,125 +35,121 @@ def test_specialist_registry_completeness() -> None:
         assert agent.has_side_effects == spec.has_side_effects
 
 
-def test_specialist_agents_execution_and_contracts(tmp_path: Path) -> None:
+def test_source_collector_does_not_fabricate_sources_or_claims(tmp_path: Path) -> None:
     conn = init_db(tmp_path / "test_agents.db")
     proj_mgr = ProjectManager(conn, tmp_path / "projects")
     proj = proj_mgr.create_project(
         ProjectCreate(
-            name="Specialist Test Project",
+            name="Evidence Integrity Test",
             chapter_title="Fundamental Rights: Scope and Writs",
             exam_cycle="2026",
             cutoff_date="2026-11-26",
             target_duration_min=5,
-            tts_enabled=True,
+            tts_enabled=False,
         )
     )
-
     context = AgentExecutionContext(
         project_id=proj.id,
         project_dir=Path(proj.root_dir),
-        run_id="run_spec_test",
+        run_id="run_evidence_integrity",
         topic_title=proj.chapter_title,
-        content_pillar="UPSC_CIVIL_SERVICES",
-        cutoff_date=proj.cutoff_date,
-        target_duration_min=5,
-        tts_enabled=True,
         metadata={"conn": conn},
     )
 
-    # 1. Executive Producer (AGENT_01)
     agent_01 = get_specialist_agent("AGENT_01")
-    res_01 = agent_01.run(context)
-    assert res_01.status == AgentStatus.COMPLETED
-    assert "production_plan" in res_01.outputs
-    context.upstream_outputs["AGENT_01"] = {"status": "COMPLETED", **res_01.outputs}
+    result_01 = agent_01.run(context)
+    assert result_01.status == AgentStatus.COMPLETED
+    context.upstream_outputs["AGENT_01"] = {"status": "COMPLETED", **result_01.outputs}
 
-    # 2. Topic Researcher (AGENT_02)
     agent_02 = get_specialist_agent("AGENT_02")
-    res_02 = agent_02.run(context)
-    assert res_02.status == AgentStatus.COMPLETED
-    assert "research_brief" in res_02.outputs
-    assert len(res_02.outputs["research_brief"]["learning_objectives"]) >= 4
-    context.upstream_outputs["AGENT_02"] = {"status": "COMPLETED", **res_02.outputs}
+    result_02 = agent_02.run(context)
+    assert result_02.status == AgentStatus.COMPLETED
+    context.upstream_outputs["AGENT_02"] = {"status": "COMPLETED", **result_02.outputs}
 
-    # 3. Research Source Collector (AGENT_03)
     agent_03 = get_specialist_agent("AGENT_03")
-    res_03 = agent_03.run(context)
-    assert res_03.status == AgentStatus.COMPLETED
-    assert res_03.outputs["sources_count"] >= 2
-    context.upstream_outputs["AGENT_03"] = {"status": "COMPLETED", **res_03.outputs}
+    result_03 = agent_03.run(context)
+    assert result_03.status == AgentStatus.FAILED
+    assert result_03.quality_status == QualityCheckStatus.INSUFFICIENT_EVIDENCE
+    assert "will not fabricate sources" in result_03.errors[0]
+    assert conn.execute("SELECT count(*) FROM sources WHERE project_id = ?", (proj.id,)).fetchone()[0] == 0
+    assert conn.execute("SELECT count(*) FROM claims WHERE project_id = ?", (proj.id,)).fetchone()[0] == 0
 
-    # 4. Independent Fact Checker (AGENT_04)
-    agent_04 = get_specialist_agent("AGENT_04")
-    res_04 = agent_04.run(context)
-    assert res_04.status == AgentStatus.COMPLETED
-    assert res_04.outputs["claims_extracted_count"] >= 2
-    context.upstream_outputs["AGENT_04"] = {"status": "COMPLETED", **res_04.outputs}
 
-    # 5. Claim-to-Source Verifier (AGENT_05)
-    agent_05 = get_specialist_agent("AGENT_05")
-    res_05 = agent_05.run(context)
-    assert res_05.status == AgentStatus.COMPLETED
-    assert res_05.outputs["verified_claims"] >= 2
-    context.upstream_outputs["AGENT_05"] = {"status": "COMPLETED", **res_05.outputs}
+def test_claim_verifier_requires_human_attestation(tmp_path: Path) -> None:
+    conn = init_db(tmp_path / "test_attestation.db")
+    proj_mgr = ProjectManager(conn, tmp_path / "projects")
+    proj = proj_mgr.create_project(
+        ProjectCreate(
+            name="Attestation Test",
+            chapter_title="Article 32",
+            exam_cycle="2026",
+            cutoff_date="2026-11-26",
+            target_duration_min=5,
+            tts_enabled=False,
+        )
+    )
+    from upsc_studio.research.verifier import EvidenceEngine
 
-    # 6. Source Freshness Auditor (AGENT_06)
-    agent_06 = get_specialist_agent("AGENT_06")
-    res_06 = agent_06.run(context)
-    assert res_06.status == AgentStatus.COMPLETED
-    assert res_06.outputs["is_fresh"] is True
-    context.upstream_outputs["AGENT_06"] = {"status": "COMPLETED", **res_06.outputs}
+    engine = EvidenceEngine(conn, Path(proj.root_dir))
+    source_id = engine.add_source(
+        project_id=proj.id,
+        title="Constitution of India",
+        publisher="Government of India",
+        source_tier="PRIMARY_OFFICIAL",
+        pub_date="2024-01-01",
+    )
+    claim_id = engine.add_claim(
+        project_id=proj.id,
+        statement="Article 32 permits approaching the Supreme Court for enforcement of Part III rights.",
+        chapter_section="Constitutional Remedies",
+        source_id=source_id,
+        page_or_section="Article 32",
+    )
+    context = AgentExecutionContext(
+        project_id=proj.id,
+        project_dir=Path(proj.root_dir),
+        run_id="run_attestation",
+        topic_title="Article 32",
+        upstream_outputs={"AGENT_04": {"status": "COMPLETED"}},
+        metadata={"conn": conn},
+    )
+    verifier = get_specialist_agent("AGENT_05")
+    result = verifier.run(context)
+    assert result.status == AgentStatus.COMPLETED
+    assert result.quality_status == QualityCheckStatus.REVIEW_REQUIRED
+    row = conn.execute("SELECT status FROM claims WHERE id = ?", (claim_id,)).fetchone()
+    assert row["status"] == "HUMAN_REVIEW_REQUIRED"
 
-    # 7. Curriculum Mapper (AGENT_07)
-    agent_07 = get_specialist_agent("AGENT_07")
-    res_07 = agent_07.run(context)
-    assert res_07.status == AgentStatus.COMPLETED
-    assert "chapter_map" in res_07.outputs
-    context.upstream_outputs["AGENT_07"] = {"status": "COMPLETED", **res_07.outputs}
+    engine.verify_claim_against_source(
+        claim_id=claim_id,
+        source_id=source_id,
+        page_or_section="Article 32, Clause 1",
+        evidence_excerpt="The right to move the Supreme Court by appropriate proceedings for enforcement of Part III rights.",
+        reviewer_id="human-reviewer-1",
+    )
+    result = verifier.run(context)
+    assert result.quality_status == QualityCheckStatus.PASSED
+    row = conn.execute("SELECT status, verification_notes FROM claims WHERE id = ?", (claim_id,)).fetchone()
+    assert row["status"] == "VERIFIED"
+    assert row["verification_notes"].startswith("HUMAN_ATTESTED_BY:human-reviewer-1")
 
-    # 8. Topic Coverage Auditor (AGENT_08)
-    agent_08 = get_specialist_agent("AGENT_08")
-    res_08 = agent_08.run(context)
-    assert res_08.status == AgentStatus.COMPLETED
-    assert res_08.outputs["coverage_items_count"] > 0
-    context.upstream_outputs["AGENT_08"] = {"status": "COMPLETED", **res_08.outputs}
 
-    # 9. Instructional Designer (AGENT_09)
-    agent_09 = get_specialist_agent("AGENT_09")
-    res_09 = agent_09.run(context)
-    assert res_09.status == AgentStatus.COMPLETED
-    assert "pedagogical_plan" in res_09.outputs
-    context.upstream_outputs["AGENT_09"] = {"status": "COMPLETED", **res_09.outputs}
+def test_attestation_requires_reviewer_and_matching_project(tmp_path: Path) -> None:
+    conn = init_db(tmp_path / "test_attestation_scope.db")
+    proj_mgr = ProjectManager(conn, tmp_path / "projects")
+    first = proj_mgr.create_project(ProjectCreate(name="Project One", chapter_title="Article 32"))
+    second = proj_mgr.create_project(ProjectCreate(name="Project Two", chapter_title="Article 14"))
+    from upsc_studio.research.verifier import EvidenceEngine
 
-    # 10. Teaching Script Writer (AGENT_10)
-    agent_10 = get_specialist_agent("AGENT_10")
-    res_10 = agent_10.run(context)
-    assert res_10.status == AgentStatus.COMPLETED
-    assert res_10.outputs["sections_count"] > 0
-    context.upstream_outputs["AGENT_10"] = {"status": "COMPLETED", **res_10.outputs}
-
-    # 11. Hinglish Language Editor (AGENT_11)
-    agent_11 = get_specialist_agent("AGENT_11")
-    res_11 = agent_11.run(context)
-    assert res_11.status == AgentStatus.COMPLETED
-    assert Path(res_11.outputs["display_script_path"]).exists()
-    assert Path(res_11.outputs["spoken_script_path"]).exists()
-    context.upstream_outputs["AGENT_11"] = {"status": "COMPLETED", **res_11.outputs}
-
-    # 13. Visual Research Director (AGENT_13)
-    context.upstream_outputs["AGENT_12"] = {"status": "COMPLETED"}
-    agent_13 = get_specialist_agent("AGENT_13")
-    res_13 = agent_13.run(context)
-    assert res_13.status == AgentStatus.COMPLETED
-    assert "visual_guidelines" in res_13.outputs
-    context.upstream_outputs["AGENT_13"] = {"status": "COMPLETED", **res_13.outputs}
-
-    # 14. Storyboard Architect (AGENT_14)
-    agent_14 = get_specialist_agent("AGENT_14")
-    res_14 = agent_14.run(context)
-    assert res_14.status == AgentStatus.COMPLETED
-    assert res_14.outputs["scenes_count"] > 0
-    context.upstream_outputs["AGENT_14"] = {"status": "COMPLETED", **res_14.outputs}
+    engine = EvidenceEngine(conn, Path(first.root_dir))
+    source_id = engine.add_source(first.id, "Constitution", "Government of India", "PRIMARY_OFFICIAL")
+    claim_id = engine.add_claim(first.id, "Article 32 provides a constitutional remedy.", "Remedies")
+    with pytest.raises(ValueError, match="reviewer_id"):
+        engine.verify_claim_against_source(claim_id, source_id, "Article 32", "Sufficient excerpt text.")
+    second_engine = EvidenceEngine(conn, Path(second.root_dir))
+    second_source = second_engine.add_source(second.id, "Other source", "Publisher", "OTHER")
+    with pytest.raises(ValueError, match="same project"):
+        engine.verify_claim_against_source(claim_id, second_source, "Article 32", "Sufficient excerpt text.", reviewer_id="reviewer")
 
 
 def test_specialist_agent_blocked_on_missing_upstream(tmp_path: Path) -> None:
