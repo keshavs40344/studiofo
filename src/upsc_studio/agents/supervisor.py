@@ -98,11 +98,13 @@ class ExecutiveProducer:
         typed_notes: str,
         voice_path: Path | None,
         ai_narration: bool,
+        content_category: str = "upsc",
         manual_review_path: Path | None = None,
     ) -> str:
         """Hash inputs without storing their text or media bytes in the task payload."""
         inputs: dict[str, Any] = {
             "project_id": project_id,
+            "content_category": content_category,
             "typed_notes_sha256": hashlib.sha256(typed_notes.encode("utf-8")).hexdigest(),
             "ai_narration": bool(ai_narration),
             "notes_files": [],
@@ -157,7 +159,8 @@ class ExecutiveProducer:
         manual_review_path = project_dir / "qa" / "manual_review.json"
         fingerprint = self._input_fingerprint(
             project_id, resolved_notes, typed_notes, resolved_voice, ai_narration,
-            manual_review_path,
+            content_category=project.content_category,
+            manual_review_path=manual_review_path,
         )
         workflow_id = f"production:{project_id}:{fingerprint[:24]}"
         context: dict[str, Any] = {}
@@ -174,7 +177,7 @@ class ExecutiveProducer:
             return {
                 "status": "COMPLETED",
                 "project_id": project_id,
-                "category": "not_yet_explicitly_selected",
+                "category": current.content_category,
                 "notes_file_count": len(resolved_notes),
                 "typed_notes_present": bool(typed_notes.strip()),
                 "voice_present": resolved_voice is not None,
