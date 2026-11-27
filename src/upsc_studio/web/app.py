@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import requests
 import uuid
 from pathlib import Path
 from urllib.parse import urlparse
@@ -16,6 +17,7 @@ from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import (
     ClaimVerificationRequest,
+    DubLanguageRequest,
     ManualRetryRequest,
     ManualQAReview,
     ProjectCreate,
@@ -33,6 +35,11 @@ from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
 from upsc_studio.research.verifier import EvidenceEngine
 from upsc_studio.research.discovery import ResearchDiscovery
+from upsc_studio.i18n.translation import LANGUAGE_LABELS, TranslationService, TranslationUnavailable
+from upsc_studio.audio.processor import VoiceAudioProcessor
+from upsc_studio.tts.adapter import PiperTTSEngine
+from upsc_studio.graphics.rights import AssetRightsLedger
+from upsc_studio.video.renderer import VideoRenderer
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -110,6 +117,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div class="card" style="background:#0f172a;">
           <h3>Research & Evidence Ledger</h3>
           <p>Register sources first. A URL being present does not prove the claim; review the source text and excerpt yourself.</p>
+          <h4>Multilingual Script, Subtitles & Dub</h4>
+          <label>Target language</label>
+          <select id="dub-language">
+            <option value="en">English</option><option value="hi">Hindi</option>
+            <option value="bn">Bengali</option><option value="ta">Tamil</option>
+            <option value="te">Telugu</option><option value="mr">Marathi</option>
+            <option value="gu">Gujarati</option><option value="kn">Kannada</option>
+            <option value="ml">Malayalam</option><option value="pa">Punjabi</option>
+            <option value="or">Odia</option>
+          </select>
+          <button class="secondary" onclick="createLanguageOutput()">Translate Script / Subtitles / Dub</button>
+          <pre id="i18n-output">Translation provider and target-language voice availability are checked when requested.</pre>
           <h4>Register External Source</h4>
           <label>Source title</label><input id="source-title" placeholder="Report / Act / Paper title" />
           <label>Publisher</label><input id="source-publisher" placeholder="Ministry / Institution / Journal" />
@@ -279,6 +298,21 @@ async function openProject(id) {
   }
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
   await loadResearch();
+}
+
+async function createLanguageOutput() {
+  if (!currentProjectId) return;
+  const target_language = document.getElementById('dub-language').value;
+  const output = document.getElementById('i18n-output');
+  output.textContent = 'Checking translation provider and target-language voice models...';
+  const res = await fetch(`/api/projects/${currentProjectId}/dub`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({target_language})
+  });
+  const data = await res.json();
+  output.textContent = JSON.stringify(data, null, 2);
+  if (!res.ok) alert('Language output not completed: ' + (data.detail || 'Provider unavailable.'));
 }
 
 async function loadResearch() {
@@ -663,6 +697,122 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             require_dated_sources=proj.content_category == "current_affairs",
         )
         return result
+
+    @app.get("/api/i18n/capabilities")
+    def get_i18n_capabilities() -> dict:
+        translation = TranslationService().capabilities()
+        models = PiperTTSEngine(resolved_projects).discover_piper_models()
+        return {
+            "translation": translation,
+            "language_catalogue": [
+                {"code": code, "label": label}
+                for code, label in LANGUAGE_LABELS.items()
+            ],
+            "piper_models": models,
+            "license_policy": (
+                "Dubbing is allowed only when the model entry in voice_licenses.json "
+                "contains license, attribution, commercial_use=true and confirmed_by."
+            ),
+        }
+
+    @app.post("/api/projects/{project_id}/dub")
+    def create_language_output(project_id: str, payload: DubLanguageRequest) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        project_dir = Path(proj.root_dir)
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        if not storyboard_path.is_file():
+            raise HTTPException(status_code=409, detail="Run production and generate a storyboard before translation.")
+        try:
+            scenes = [
+                SceneSpec.model_validate(item)
+                for item in json.loads(storyboard_path.read_text(encoding="utf-8"))
+            ]
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=409, detail=f"Storyboard cannot be translated: {exc}") from exc
+        if not scenes:
+            raise HTTPException(status_code=409, detail="Storyboard contains no scenes.")
+
+        translator = TranslationService()
+        try:
+            translation = translator.translate_segments(
+                [scene.narration_text for scene in scenes], payload.target_language
+            )
+        except TranslationUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except (ValueError, requests.RequestException) as exc:
+            raise HTTPException(status_code=502, detail=f"Translation provider failed: {exc}") from exc
+
+        translated_texts = translation["translated_texts"]
+        translated_scenes = [
+            scene.model_copy(update={"narration_text": translated})
+            for scene, translated in zip(scenes, translated_texts)
+        ]
+        script_path = translator.write_translated_script(
+            project_dir, proj.chapter_title, scenes, translated_texts,
+            payload.target_language, translation["provider"],
+        )
+        language_dir = project_dir / "subtitles" / payload.target_language
+        language_dir.mkdir(parents=True, exist_ok=True)
+        subtitle_path = language_dir / "subtitles.srt"
+        estimated_duration = sum(max(1.0, scene.estimated_duration_sec) for scene in scenes)
+        VoiceAudioProcessor(project_dir).generate_subtitles(
+            translated_scenes, total_audio_sec=estimated_duration, output_path=subtitle_path
+        )
+
+        tts = PiperTTSEngine(project_dir, rights_ledger=AssetRightsLedger(conn, project_dir))
+        matching_models = [
+            model for model in tts.discover_piper_models()
+            if model["language_code"] == payload.target_language
+        ]
+        usable_models = [model for model in matching_models if model["usable_for_dubbing"]]
+        response: dict[str, Any] = {
+            "status": "TRANSLATION_READY_VOICE_MODEL_REQUIRED",
+            "translation": {
+                **{key: value for key, value in translation.items() if key != "translated_texts"},
+                "source_language": "AUTO_DETECTED",
+                "human_review_required": True,
+            },
+            "translated_script": str(script_path),
+            "translated_subtitles": str(subtitle_path),
+            "matching_piper_models": matching_models,
+            "dubbed_audio": None,
+            "dubbed_video": None,
+        }
+        if not usable_models:
+            response["voice_requirement"] = (
+                "Install a target-language Piper model and verify its licence in "
+                "data/tts_models/piper/voice_licenses.json. No substitute voice is used."
+            )
+        else:
+            model = usable_models[0]
+            try:
+                audio = tts.synthesize_translated_scenes(
+                    project_id, scenes, translated_texts,
+                    payload.target_language, Path(model["model_path"]),
+                )
+                response["dubbed_audio"] = audio
+                base_video = project_dir / "render" / "final" / "final_video.mp4"
+                if base_video.is_file():
+                    response["dubbed_video"] = VideoRenderer.render_dubbed_variant(
+                        project_dir, payload.target_language, base_video,
+                        Path(audio["narration_wav"]), Path(audio["subtitles_srt"]),
+                    )
+                    response["status"] = "DUBBED_VIDEO_RENDERED_NEEDS_HUMAN_REVIEW"
+                else:
+                    response["status"] = "DUBBED_AUDIO_READY_VIDEO_RENDER_REQUIRED"
+            except (OSError, RuntimeError, ValueError, PermissionError) as exc:
+                response["status"] = "VOICE_GENERATION_BLOCKED"
+                response["voice_error"] = f"{type(exc).__name__}: {str(exc)[:500]}"
+
+        output_dir = project_dir / "render" / "languages" / payload.target_language
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "language_output_manifest.json").write_text(
+            json.dumps(response, indent=2, ensure_ascii=False, default=str), encoding="utf-8"
+        )
+        return response
 
     @app.get("/api/projects/{project_id}/research")
     def get_research_ledger(project_id: str) -> dict:
