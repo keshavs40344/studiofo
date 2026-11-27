@@ -151,15 +151,29 @@ class MultiPassResearchWorkflow:
             reasons: list[str] = []
             status = MultiPassStatus.VERIFIED
 
-            # Check 1: Missing Source or Empty Page Reference
+            # Check 1: Require an explicit reviewer attestation and a recorded source excerpt.
+            excerpt_marker = "Evidence excerpt:"
+            excerpt = v_notes.split(excerpt_marker, 1)[1].strip() if excerpt_marker in v_notes else ""
+            has_attestation = (
+                v_notes.startswith("HUMAN_ATTESTED_BY:")
+                and bool(v_notes.splitlines()[0].partition(":")[2].strip())
+                and bool(s_id)
+                and s_id in sources_map
+                and bool(page_ref.strip())
+                and len(excerpt) >= 10
+                and c["status"] == "VERIFIED"
+            )
             if not s_id or s_id not in sources_map:
                 status = MultiPassStatus.INSUFFICIENT_EVIDENCE
-                reasons.append("Lacks authoritative linked source in bibliography.")
+                reasons.append("Lacks a registered source.")
                 insufficient_count += 1
             elif not page_ref or len(page_ref.strip()) < 2:
                 status = MultiPassStatus.INSUFFICIENT_EVIDENCE
-                reasons.append("Lacks specific page, section, or paragraph pinpoint reference.")
+                reasons.append("Lacks a specific page, section, or paragraph reference.")
                 insufficient_count += 1
+            elif not has_attestation:
+                status = MultiPassStatus.REVIEW_REQUIRED
+                reasons.append("No explicit human attestation with a source excerpt is recorded.")
 
             # Check 2: Outdated Information against Cutoff Date
             src_info = sources_map.get(s_id, {})
@@ -177,8 +191,8 @@ class MultiPassResearchWorkflow:
                 conflicting_count += 1
 
             # Determine whether safe for documentary narration
-            is_safe = (status == MultiPassStatus.VERIFIED and nature != ClaimNature.PREDICTION)
-            if status == MultiPassStatus.VERIFIED and nature == ClaimNature.FACT:
+            is_safe = (status == MultiPassStatus.VERIFIED and nature == ClaimNature.FACT and has_attestation)
+            if is_safe:
                 verified_count += 1
 
             eval_claim = EvaluatedClaim(
@@ -197,8 +211,8 @@ class MultiPassResearchWorkflow:
             )
 
             # Persist status to SQLite
-            db_status = "VERIFIED" if is_safe else "UNSUPPORTED"
-            notes_str = f"[{status.value}] " + ("; ".join(reasons) if reasons else v_notes)
+            db_status = "VERIFIED" if is_safe else ("HUMAN_REVIEW_REQUIRED" if status == MultiPassStatus.REVIEW_REQUIRED else "UNSUPPORTED")
+            notes_str = (v_notes + "\\n" if v_notes else "") + f"[{status.value}] " + ("; ".join(reasons) if reasons else "Human-attested evidence retained.")
             self.conn.execute(
                 "UPDATE claims SET status = ?, verification_notes = ? WHERE id = ?",
                 (db_status, notes_str, c["id"]),
