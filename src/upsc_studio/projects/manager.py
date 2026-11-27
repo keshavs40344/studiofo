@@ -24,8 +24,8 @@ class ProjectManager:
     """
 
     BACKUP_FORMAT = "upsc-studio-project"
-    BACKUP_VERSION = 2
-    SUPPORTED_BACKUP_VERSIONS = {1, 2}
+    BACKUP_VERSION = 3
+    SUPPORTED_BACKUP_VERSIONS = {1, 2, 3}
     MAX_BACKUP_UNCOMPRESSED_BYTES = 20 * 1024 * 1024 * 1024
     PROJECT_DATA_TABLES = (
         "source_documents",
