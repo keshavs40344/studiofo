@@ -441,7 +441,8 @@ class StagedChapterPipeline:
             final_status = qa["pipeline_status"]
         elif workflow.get("status") == "REVIEW_REQUIRED":
             final_status = ProjectStatus.NEEDS_REVIEW.value
-        elif workflow.get("status") == "FAILED":
+        elif workflow.get("status") in {"FAILED", "BLOCKED"}:
+            # A blocked required stage is not a successful or indefinitely processing run.
             final_status = ProjectStatus.FAILED.value
         else:
             final_status = ProjectStatus.PROCESSING.value
