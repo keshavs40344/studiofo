@@ -55,7 +55,14 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <input id="p-name" placeholder="e.g. Anti-Defection Law GS2" />
         <label>Chapter / Topic Title</label>
         <input id="p-topic" placeholder="e.g. Anti-Defection Law and Tenth Schedule" />
-        <label>Exam Cycle</label>
+        <label>Content Category</label>
+        <select id="p-category">
+          <option value="upsc">UPSC syllabus</option>
+          <option value="general_knowledge">General Knowledge</option>
+          <option value="current_affairs">Current Affairs</option>
+          <option value="deep_dive">Deep Dive</option>
+        </select>
+        <label>Exam Cycle (UPSC category only)</label>
         <input id="p-cycle" value="UPSC CSE 2026" />
         <label>Research Cutoff Date</label>
         <input id="p-cutoff" value="2026-11-26" />
@@ -89,6 +96,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div class="card" style="background:#0f172a;">
           <h3>Manual Quality Review</h3>
           <p id="manual-review-status">No current review is recorded.</p>
+          <label><input type="checkbox" id="review-scope" /> I checked the complete topic/syllabus scope and confirmed included, missing and out-of-scope areas.</label>
           <p>Final release remains blocked until these checks are actually reviewed. Tick only after inspecting the generated files/video.</p>
           <label>Reviewer</label>
           <input id="reviewer-name" value="" placeholder="Your name" />
@@ -132,6 +140,7 @@ async function createProject() {
   const payload = {
     name: document.getElementById('p-name').value,
     chapter_title: document.getElementById('p-topic').value,
+    content_category: document.getElementById('p-category').value,
     exam_cycle: document.getElementById('p-cycle').value,
     cutoff_date: document.getElementById('p-cutoff').value
   };
@@ -164,6 +173,7 @@ async function openProject(id) {
   const reviewCurrent = review.review_is_current === true;
   document.getElementById('reviewer-name').value = review.reviewer || '';
   document.getElementById('review-notes').value = review.notes || '';
+  document.getElementById('review-scope').checked = reviewCurrent && checks.content_scope_coverage === true;
   document.getElementById('manual-review-status').textContent = reviewCurrent
     ? `Current review by ${review.reviewer}`
     : (review.reviewer ? 'Saved review is stale; re-check the current outputs.' : 'No current review is recorded.');
@@ -195,6 +205,7 @@ async function saveManualReview() {
   if (!currentProjectId) return;
   const payload = {
     reviewer: document.getElementById('reviewer-name').value,
+    content_scope_coverage: document.getElementById('review-scope').checked,
     teaching_clarity: document.getElementById('review-teaching').checked,
     visual_relevance: document.getElementById('review-visuals').checked,
     voice_subtitle_alignment: document.getElementById('review-subtitles').checked,
@@ -383,6 +394,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             "artifact_fingerprint": artifact_fingerprint,
             "reviewer": payload.reviewer,
             "checks": {
+                "content_scope_coverage": payload.content_scope_coverage,
                 "teaching_clarity": payload.teaching_clarity,
                 "visual_relevance": payload.visual_relevance,
                 "voice_subtitle_alignment": payload.voice_subtitle_alignment,
