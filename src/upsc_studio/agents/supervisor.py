@@ -242,6 +242,7 @@ class ExecutiveProducer:
                 "chapter_map": result.get("chapter_map", {}),
                 "publishing_package": result.get("publishing_package", {}),
                 "render_manifest": result.get("render_manifest"),
+                "shorts_manifest": result.get("shorts_manifest"),
                 "audio_report": result.get("audio_report"),
                 "qa": result.get("qa", {}),
                 "ten_gates": result.get("ten_gates", {}),
@@ -268,7 +269,8 @@ class ExecutiveProducer:
             chapter_map = production.get("chapter_map") or {}
             primary_papers = chapter_map.get("primary_papers", [])
             report = EditorialOptimizer().optimize_and_extract_shorts(
-                project_dir, project.chapter_title, primary_papers, scenes
+                project_dir, project.chapter_title, primary_papers, scenes,
+                content_category=project.content_category,
             )
             context["editorial"] = report
             return {"status": "COMPLETED", **report}
@@ -556,6 +558,7 @@ class ExecutiveProducer:
             "agents_registered": len(AGENT_REGISTRY),
             "agent_states": {key: value.model_dump() for key, value in agent_states.items()},
             "supervisor_task": agent_states["AGENT_01"].model_dump(),
+            "shorts_manifest": pipe_out.get("shorts_manifest") if isinstance(pipe_out, dict) else None,
             "editorial_and_shorts": (
                 context.get("editorial") or editorial_output
             ),
