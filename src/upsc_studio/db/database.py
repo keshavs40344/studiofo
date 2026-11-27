@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
     chapter_title TEXT NOT NULL,
+    content_category TEXT NOT NULL DEFAULT 'upsc',
     exam_cycle TEXT NOT NULL,
     cutoff_date TEXT NOT NULL,
     target_duration_min INTEGER NOT NULL DEFAULT 30,
@@ -159,6 +160,14 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     """Create tables if missing and record schema version."""
     conn = get_connection(db_path)
     conn.executescript(SCHEMA_SQL)
+    # Backward-compatible migration for existing user databases.
+    project_columns = {
+        row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()
+    }
+    if "content_category" not in project_columns:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN content_category TEXT NOT NULL DEFAULT 'upsc'"
+        )
     conn.execute(
         "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
         ("schema_version", str(SCHEMA_VERSION)),
