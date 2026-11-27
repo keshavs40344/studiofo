@@ -1300,15 +1300,15 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                     "status": "ALREADY_UPLOADED",
                     "message": "This exact approved video has already been uploaded. No second upload was attempted.",
                 }
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
         try:
-            descriptor = lock_path.open("x", encoding="utf-8")
-            descriptor.write_text(json.dumps({
-                "project_id": project_id,
-                "requested_by": payload.approver,
-                "requested_at": utc_now_iso(),
-                "video_sha256": video_sha256,
-            }), encoding="utf-8")
-            descriptor.close()
+            with lock_path.open("x", encoding="utf-8") as descriptor:
+                descriptor.write(json.dumps({
+                    "project_id": project_id,
+                    "requested_by": payload.approver,
+                    "requested_at": utc_now_iso(),
+                    "video_sha256": video_sha256,
+                }))
         except FileExistsError as exc:
             raise HTTPException(
                 status_code=409,
