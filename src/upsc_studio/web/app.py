@@ -77,7 +77,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <label>Exam Cycle (UPSC category only)</label>
         <input id="p-cycle" value="UPSC CSE 2026" />
         <label>Research Cutoff Date</label>
-        <input id="p-cutoff" value="2026-11-26" />
+        <input id="p-cutoff" type="date" />
         <button onclick="createProject()">Create Project</button>
       </div>
       <div class="card">
@@ -158,6 +158,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   </div>
 <script>
 let currentProjectId = null;
+const cutoffInput = document.getElementById('p-cutoff');
+const localNow = new Date();
+const localCutoff = new Date(localNow.getTime() - localNow.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+cutoffInput.value = localCutoff;
 
 async function loadHardware() {
   const res = await fetch('/api/hardware');
@@ -243,7 +247,7 @@ async function loadResearch() {
     'CLAIMS:',
     ...data.claims.map(cl => `- ${cl.id} | ${cl.status} | ${cl.statement} | source=${cl.source_id || 'none'}`)
   ];
-  document.getElementById('research-output').textContent = lines.join('\\n');
+  document.getElementById('research-output').textContent = lines.join(String.fromCharCode(10));
 }
 
 async function registerSource() {
