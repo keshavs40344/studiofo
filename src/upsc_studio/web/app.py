@@ -92,6 +92,37 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <input type="file" id="voice-file" accept=".wav,.mp3,.m4a" />
           <button onclick="runPipeline()">Run Production Pipeline</button>
         </div>
+        <div class="card" style="background:#0f172a;">
+          <h3>Research & Evidence Ledger</h3>
+          <p>Register sources first. A URL being present does not prove the claim; review the source text and excerpt yourself.</p>
+          <h4>Register External Source</h4>
+          <label>Source title</label><input id="source-title" placeholder="Report / Act / Paper title" />
+          <label>Publisher</label><input id="source-publisher" placeholder="Ministry / Institution / Journal" />
+          <label>Source tier</label>
+          <select id="source-tier">
+            <option value="PRIMARY_OFFICIAL">Primary official</option>
+            <option value="ACADEMIC_PEER_REVIEWED">Academic peer reviewed</option>
+            <option value="REPUTABLE_NEWS">Reputable news</option>
+            <option value="OTHER">Other</option>
+          </select>
+          <label>HTTP(S) source URL</label><input id="source-url" type="url" placeholder="https://..." />
+          <label>Publication date (optional)</label><input id="source-date" placeholder="YYYY-MM-DD" />
+          <button class="secondary" onclick="registerSource()">Register Source</button>
+          <h4>Register Factual Claim</h4>
+          <label>Claim statement (one factual statement)</label><textarea id="claim-statement" rows="2"></textarea>
+          <label>Chapter section</label><input id="claim-section" placeholder="Definition / Mechanism / Data" />
+          <label>Source ID (optional at first)</label><input id="claim-source-id" placeholder="src_..." />
+          <label>Source page / section (optional until reviewed)</label><input id="claim-page" placeholder="Page 12 / Section 3.2" />
+          <button class="secondary" onclick="registerClaim()">Register Claim for Review</button>
+          <h4>Human Verification Attestation</h4>
+          <label>Claim ID</label><input id="verify-claim-id" placeholder="clm_..." />
+          <label>Source ID</label><input id="verify-source-id" placeholder="src_..." />
+          <label>Exact page / section</label><input id="verify-page" placeholder="Page 12 / Section 3.2" />
+          <label>Evidence excerpt (minimum 10 characters)</label><textarea id="verify-excerpt" rows="3"></textarea>
+          <label>Reviewer</label><input id="verify-reviewer" placeholder="Name of reviewer" />
+          <button onclick="verifyClaim()">Mark Claim VERIFIED after source review</button>
+          <pre id="research-output">No research records loaded.</pre>
+        </div>
         <h3>QA Gates & Release Readiness</h3>
         <div id="qa-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
         <div class="card" style="background:#0f172a;">
@@ -183,6 +214,82 @@ async function openProject(id) {
   document.getElementById('review-subtitles').checked = reviewCurrent && checks.voice_subtitle_alignment === true;
   document.getElementById('review-playback').checked = reviewCurrent && checks.final_playback_inspection === true;
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+  await loadResearch();
+}
+
+async function loadResearch() {
+  if (!currentProjectId) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/research`);
+  const data = await res.json();
+  if (!res.ok) {
+    document.getElementById('research-output').textContent = JSON.stringify(data, null, 2);
+    return;
+  }
+  const lines = [
+    `Category: ${data.content_category}`,
+    'SOURCES:',
+    ...data.sources.map(s => `- ${s.id} | ${s.source_tier} | ${s.title} | ${s.url || 'no URL'}`),
+    'CLAIMS:',
+    ...data.claims.map(cl => `- ${cl.id} | ${cl.status} | ${cl.statement} | source=${cl.source_id || 'none'}`)
+  ];
+  document.getElementById('research-output').textContent = lines.join('\\n');
+}
+
+async function registerSource() {
+  if (!currentProjectId) return;
+  const payload = {
+    title: document.getElementById('source-title').value,
+    publisher: document.getElementById('source-publisher').value,
+    source_tier: document.getElementById('source-tier').value,
+    url: document.getElementById('source-url').value,
+    pub_date: document.getElementById('source-date').value || null,
+    notes: ''
+  };
+  const res = await fetch(`/api/projects/${currentProjectId}/sources`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Source not registered: ' + (data.detail || 'Invalid source')); return; }
+  document.getElementById('claim-source-id').value = data.source_id;
+  document.getElementById('verify-source-id').value = data.source_id;
+  await loadResearch();
+}
+
+async function registerClaim() {
+  if (!currentProjectId) return;
+  const payload = {
+    statement: document.getElementById('claim-statement').value,
+    chapter_section: document.getElementById('claim-section').value,
+    source_id: document.getElementById('claim-source-id').value || null,
+    page_or_section: document.getElementById('claim-page').value || null
+  };
+  const res = await fetch(`/api/projects/${currentProjectId}/claims`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Claim not registered: ' + (data.detail || 'Invalid claim')); return; }
+  document.getElementById('verify-claim-id').value = data.claim_id;
+  document.getElementById('verify-source-id').value = payload.source_id || '';
+  await loadResearch();
+}
+
+async function verifyClaim() {
+  if (!currentProjectId) return;
+  const claimId = document.getElementById('verify-claim-id').value.trim();
+  const payload = {
+    source_id: document.getElementById('verify-source-id').value.trim(),
+    page_or_section: document.getElementById('verify-page').value,
+    evidence_excerpt: document.getElementById('verify-excerpt').value,
+    reviewer: document.getElementById('verify-reviewer').value,
+    ref_period: null
+  };
+  const res = await fetch(`/api/projects/${currentProjectId}/claims/${claimId}/verify`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Claim verification not recorded: ' + (data.detail || 'Review failed')); return; }
+  alert('Human verification attestation saved. The system did not independently compare semantic support.');
+  await loadResearch();
 }
 
 async function runPipeline() {
