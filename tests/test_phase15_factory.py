@@ -22,6 +22,12 @@ from upsc_studio.tts.pronunciation import PronunciationNormalizer
 def test_agent_registry_and_retry_recovery(tmp_path: Path) -> None:
     assert len(AGENT_REGISTRY) == 24
     conn = init_db(tmp_path / "ag.db")
+    ev.verify_claim_against_source(
+        claim_id, src, "Part III",
+        "Part III of the Constitution contains the provisions relating to Fundamental Rights.",
+        reviewer_id="factory-test-reviewer",
+    )
+
     sup = ExecutiveProducer(conn, tmp_path / "projects")
 
     attempts = {"count": 0}
@@ -29,7 +35,7 @@ def test_agent_registry_and_retry_recovery(tmp_path: Path) -> None:
     def flaky() -> dict:
         attempts["count"] += 1
         if attempts["count"] == 1:
-            raise RuntimeError("Transient network timeout")
+            raise TimeoutError("Transient network timeout")
         return {"output": "ok"}
 
     res, out = sup.run_with_retry("AGENT_03", flaky, input_refs=["doc_1"], max_retries=2)
@@ -57,11 +63,13 @@ def test_youtube_publisher_enforces_private_default_and_oauth(tmp_path: Path) ->
     res_blocked_qa = yt.upload_video(mp4, {"video_title": "Test"}, qa_passed=False)
     assert res_blocked_qa["status"] == "BLOCKED_QA_FAILED"
 
-    with pytest.raises(PermissionError):
-        yt.upload_video(mp4, {"video_title": "Test"}, qa_passed=True, privacy_status="public")
+    public_without_approval = yt.upload_video(
+        mp4, {"video_title": "Test"}, qa_passed=True, privacy_status="public"
+    )
+    assert public_without_approval["status"] == "BLOCKED_AWAITING_EXPLICIT_USER_APPROVAL"
 
     res_pending = yt.upload_video(mp4, {"video_title": "Test"}, qa_passed=True, privacy_status="private")
-    assert res_pending["status"] == "PENDING_OAUTH_CONNECTION"
+    assert res_pending["status"] == "BLOCKED_AWAITING_EXPLICIT_USER_APPROVAL"
 
 
 def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None:
@@ -85,7 +93,7 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
         url="https://legislative.gov.in/",
         pub_date="2024-05-01",
     )
-    ev.add_claim(
+    claim_id = ev.add_claim(
         proj.id,
         "Part III (Articles 12-35) guarantees Fundamental Rights.",
         "Constitutional Basis",
@@ -105,4 +113,4 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     assert Path(out["render_manifest"]["final_video"]).exists()
     assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
     assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
-    assert out["youtube_publish"]["status"] == "PENDING_OAUTH_CONNECTION"
+    assert out["youtube_publish"]["status"] == "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL"
