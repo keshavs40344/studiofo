@@ -198,16 +198,17 @@ class PiperTTSEngine:
 
         return quality_report
 
-    def discover_piper_models(self) -> list[dict[str, Any]]:
-        """List installed Piper voices and their explicitly recorded licence metadata."""
-        model_dir = self.model_path.parent
-        manifest_path = model_dir / "voice_licenses.json"
+    @classmethod
+    def inventory_piper_models(cls, model_dir: Path | None = None) -> list[dict[str, Any]]:
+        """List installed Piper voices without creating or mutating a project workspace."""
+        root = Path(model_dir) if model_dir is not None else PROJECT_ROOT / "data" / "tts_models" / "piper"
+        manifest_path = root / "voice_licenses.json"
         try:
             license_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
         except (OSError, json.JSONDecodeError):
             license_manifest = {}
         models: list[dict[str, Any]] = []
-        for path in sorted(model_dir.glob("*.onnx")):
+        for path in sorted(root.glob("*.onnx")):
             config_path = Path(str(path) + ".json")
             locale = path.stem.split("-", 1)[0]
             language_code = locale.split("_", 1)[0].lower()
@@ -233,6 +234,10 @@ class PiperTTSEngine:
                 ),
             })
         return models
+
+    def discover_piper_models(self) -> list[dict[str, Any]]:
+        """List Piper models beneath this runtime's configured model directory."""
+        return self.inventory_piper_models(self.model_path.parent)
 
     def synthesize_translated_scenes(
         self,
