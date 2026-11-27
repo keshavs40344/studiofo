@@ -11,6 +11,7 @@ from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import ProjectCreate, SceneSpec
 from upsc_studio.projects.manager import ProjectManager
+from upsc_studio.research.verifier import EvidenceEngine
 
 
 def _scene() -> SceneSpec:
@@ -173,3 +174,59 @@ def test_supervisor_does_not_retry_failed_non_idempotent_production(
     assert statuses["chapter_pipeline"] == "FAILED"
     assert statuses["editorial_packaging"] == "BLOCKED"
     assert statuses["gated_private_publish"] == "BLOCKED"
+
+def test_supervisor_workflow_identity_changes_when_external_research_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    conn = init_db(tmp_path / "evidence-fingerprint.db")
+    projects_root = tmp_path / "projects"
+    project = ProjectManager(conn, projects_root).create_project(
+        ProjectCreate(
+            name="Evidence fingerprint",
+            chapter_title="Energy transition",
+            content_category="deep_dive",
+        )
+    )
+    project_dir = Path(project.root_dir)
+    storyboard = project_dir / "storyboard" / "storyboard.json"
+    storyboard.write_text(
+        json.dumps([_scene().model_dump(mode="json")], ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    calls = {"pipeline": 0}
+
+    class FakePipeline:
+        def __init__(self, _conn, _projects_root):
+            pass
+
+        def run_staged(self, **kwargs):
+            calls["pipeline"] += 1
+            return {
+                "status": "WAITING_FOR_VOICE",
+                "project_id": project.id,
+                "content_category": "deep_dive",
+                "chapter_map": {"primary_papers": []},
+                "publishing_package": {},
+                "render_manifest": None,
+                "audio_report": None,
+                "qa": {},
+                "ten_gates": {},
+                "recording_script": None,
+                "scenes_count": 1,
+            }
+
+    monkeypatch.setattr(supervisor_module, "StagedChapterPipeline", FakePipeline)
+    producer = ExecutiveProducer(conn, projects_root)
+    first = producer.run_autonomous_factory(project.id, ai_narration=False)
+    second = producer.run_autonomous_factory(project.id, ai_narration=False)
+    assert first["workflow"]["workflow_id"] == second["workflow"]["workflow_id"]
+    assert calls["pipeline"] == 1
+
+    EvidenceEngine(conn, project_dir).add_source(
+        project.id, "Energy outlook", "Research institute", "ACADEMIC_PEER_REVIEWED",
+        url="https://example.org/energy-outlook",
+    )
+    third = producer.run_autonomous_factory(project.id, ai_narration=False)
+    assert third["workflow"]["workflow_id"] != second["workflow"]["workflow_id"]
+    assert calls["pipeline"] == 2
