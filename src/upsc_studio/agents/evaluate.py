@@ -264,7 +264,16 @@ def run_evaluation() -> int:
 
 
 def run_evaluations(cases_path: Path | None = None) -> dict:
-    path = cases_path or Path(__file__).parent / "fixtures" / "agent_eval_cases.json"
+    if cases_path:
+        path = cases_path
+    else:
+        candidates = [
+            Path(__file__).parent / "fixtures" / "agent_eval_cases.json",
+            Path(__file__).resolve().parents[3] / "tests" / "fixtures" / "agent_eval_cases.json",
+            Path("tests") / "fixtures" / "agent_eval_cases.json",
+            Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "agent_eval_cases.json",
+        ]
+        path = next((p for p in candidates if p.exists()), candidates[0])
     if not path.exists():
         return {"case_count": 0, "passed": 0, "failed": 0, "pass_rate": 1.0, "results": []}
     from upsc_studio.agents.workers import default_worker_handlers
