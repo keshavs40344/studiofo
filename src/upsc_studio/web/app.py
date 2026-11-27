@@ -129,6 +129,10 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           </select>
           <button class="secondary" onclick="createLanguageOutput()">Translate Script / Subtitles / Dub</button>
           <pre id="i18n-output">Translation provider and target-language voice availability are checked when requested.</pre>
+          <h4>Discover Research Sources</h4>
+          <label>Search query</label><input id="discovery-query" placeholder="Topic, policy, committee, case or report" />
+          <button class="secondary" onclick="discoverResearch()">Find Source Candidates</button>
+          <p>Search results are unverified candidates. Current Affairs excludes sources without a publication date or after the project cutoff.</p>
           <h4>Register External Source</h4>
           <label>Source title</label><input id="source-title" placeholder="Report / Act / Paper title" />
           <label>Publisher</label><input id="source-publisher" placeholder="Ministry / Institution / Journal" />
@@ -331,6 +335,21 @@ async function loadResearch() {
     ...data.claims.map(cl => `- ${cl.id} | ${cl.status} | ${cl.statement} | source=${cl.source_id || 'none'}`)
   ];
   document.getElementById('research-output').textContent = lines.join(String.fromCharCode(10));
+}
+
+async function discoverResearch() {
+  if (!currentProjectId) return;
+  const query = document.getElementById('discovery-query').value;
+  const output = document.getElementById('research-output');
+  output.textContent = 'Querying configured discovery providers...';
+  const res = await fetch(`/api/projects/${currentProjectId}/research/discover`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({query, limit: 8})
+  });
+  const data = await res.json();
+  output.textContent = JSON.stringify(data, null, 2);
+  if (!res.ok) alert('Research discovery failed: ' + (data.detail || 'Provider error'));
+  else await loadResearch();
 }
 
 async function registerSource() {
