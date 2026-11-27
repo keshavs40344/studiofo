@@ -191,3 +191,52 @@ def test_current_affairs_rejects_sources_after_the_project_cutoff(tmp_path: Path
     assert any(
         "on or before the project cutoff" in issue for issue in qa["blocking_issues"]
     )
+
+def test_academic_stage_runs_bounded_auto_research_without_verifying_claims(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from upsc_studio.pipeline.staged import StagedChapterPipeline
+    from upsc_studio.research.discovery import ResearchDiscovery
+
+    conn = init_db(tmp_path / "auto-research.db")
+    project = ProjectManager(conn, tmp_path / "projects").create_project(
+        ProjectCreate(
+            name="Auto research",
+            chapter_title="Urban heat action plans",
+            content_category="current_affairs",
+            cutoff_date="2026-11-27",
+        )
+    )
+    pipeline = StagedChapterPipeline(conn, tmp_path / "projects")
+    paths = pipeline._paths(Path(project.root_dir))
+    paths["notes"].write_text("# Urban heat action plans", encoding="utf-8")
+    calls = {}
+
+    def fake_discover(self, project_id, query, limit, cutoff_date, require_dated_sources):
+        calls.update({
+            "project_id": project_id,
+            "query": query,
+            "limit": limit,
+            "cutoff_date": cutoff_date,
+            "require_dated_sources": require_dated_sources,
+        })
+        return {
+            "status": "DISCOVERY_RESULTS_REGISTERED",
+            "registered_count": 2,
+            "fact_checking": "NOT_PERFORMED",
+        }
+
+    monkeypatch.setenv("UPSC_STUDIO_AUTO_RESEARCH", "1")
+    monkeypatch.setattr(ResearchDiscovery, "discover", fake_discover)
+    result = pipeline._stage_academic(project.id, Path(project.root_dir), paths, project)
+    report = __import__("json").loads(paths["academic"].read_text(encoding="utf-8"))
+
+    assert calls["project_id"] == project.id
+    assert calls["limit"] == 5
+    assert calls["cutoff_date"] == "2026-11-27"
+    assert calls["require_dated_sources"] is True
+    assert result["research_candidates"] == 2
+    assert report["research_discovery"]["fact_checking"] == "NOT_PERFORMED"
+    assert conn.execute(
+        "SELECT COUNT(*) FROM claims WHERE project_id = ?", (project.id,)
+    ).fetchone()[0] == 0
