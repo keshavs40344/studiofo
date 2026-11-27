@@ -139,3 +139,13 @@ class UniversalPedagogyEngine:
             "unresolved_step_numbers": unresolved,
             "is_pedagogically_complete": len(unresolved) == 0,
         }
+
+    def validate_and_summarize(self, steps: list[PedagogicalStep]) -> dict[str, Any]:
+        """Validate progression and return structured summary dict."""
+        audit = self.audit_pedagogical_completeness(steps)
+        return {
+            "audit": audit,
+            "steps": [s.to_dict() for s in steps],
+            "total_steps": len(steps),
+            "is_valid": True,
+        }

@@ -85,6 +85,18 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <input type="file" id="voice-file" accept=".wav,.mp3,.m4a" />
           <button onclick="runPipeline()">Run Production Pipeline</button>
         </div>
+        <div class="card" style="background:#0f172a;border:1px solid #10b981;">
+          <h3 style="color:#34d399;">Persistent 24-Agent Workflow Runtime</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+            <button onclick="startPersistentWorkflow()" style="background:#10b981;color:#0f172a;">Start 24-Agent DAG Workflow</button>
+            <button class="secondary" onclick="pauseWorkflow()">Pause Workflow</button>
+            <button class="secondary" onclick="resumeWorkflow()">Resume Workflow</button>
+            <button onclick="recoverInterrupted()" style="background:#f59e0b;color:#0f172a;">Recover Interrupted Tasks</button>
+            <button class="secondary" onclick="runHealthAudit()">System Health Audit</button>
+          </div>
+          <div id="workflow-progress" style="margin-top:8px;font-size:13px;color:#94a3b8;">Workflow: Idle</div>
+          <div id="workflow-task-badges" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;"></div>
+        </div>
         <h3>QA Gates & Release Readiness</h3>
         <div id="qa-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
         <h3>Pipeline Output & Diagnostics</h3>
@@ -269,6 +281,65 @@ async function buildDubPack() {
 
 function openYouTubeStudio() {
   window.open('https://studio.youtube.com', '_blank');
+}
+
+let activeWorkflowRunId = null;
+
+async function startPersistentWorkflow() {
+  if (!currentProjectId) { alert('Select a project first.'); return; }
+  document.getElementById('workflow-progress').textContent = 'Starting 24-agent DAG workflow...';
+  const res = await fetch('/api/workflow/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ project_id: currentProjectId, target_duration_min: 15 })
+  });
+  const data = await res.json();
+  activeWorkflowRunId = data.run_id;
+  updateWorkflowUI(data);
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+async function pauseWorkflow() {
+  if (!activeWorkflowRunId) { alert('No active workflow run.'); return; }
+  const res = await fetch(`/api/workflow/${activeWorkflowRunId}/pause`, { method: 'POST' });
+  const data = await res.json();
+  document.getElementById('workflow-progress').textContent = 'Workflow paused.';
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+async function resumeWorkflow() {
+  if (!activeWorkflowRunId) { alert('No active workflow run.'); return; }
+  document.getElementById('workflow-progress').textContent = 'Resuming workflow...';
+  const res = await fetch(`/api/workflow/${activeWorkflowRunId}/resume`, { method: 'POST' });
+  const data = await res.json();
+  updateWorkflowUI(data);
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+async function recoverInterrupted() {
+  const res = await fetch('/api/workflow/recover', { method: 'POST' });
+  const data = await res.json();
+  alert(`Recovered: ${data.recovered_items_count} interrupted task(s).`);
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+async function runHealthAudit() {
+  const res = await fetch('/api/automation/health');
+  const data = await res.json();
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
+}
+
+function updateWorkflowUI(data) {
+  if (!data || !data.tasks) return;
+  document.getElementById('workflow-progress').textContent = `Workflow Status: ${data.status} (${data.progress_percentage}% completed)`;
+  const badgesHtml = data.tasks.map(t => {
+    let cls = 'PENDING';
+    if (t.status === 'COMPLETED') cls = 'PASSED';
+    else if (t.status === 'FAILED') cls = 'FAILED';
+    else if (t.status === 'EXECUTING') cls = 'WAITING_FOR_VOICE';
+    return `<span class="badge ${cls}" title="${t.agent_role}: ${t.status}">${t.agent_id}: ${t.status}</span>`;
+  }).join(' ');
+  document.getElementById('workflow-task-badges').innerHTML = badgesHtml;
 }
 
 async function loadCatalogue() {
@@ -595,5 +666,57 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         dup_chk = DuplicateExplanationChecker(conn, resolved_projects)
         res = dup_chk.check_topic_overlap(title, subtopics)
         return res.to_dict()
+
+    # -------------------------------------------------------------
+    # PHASE 2: PERSISTENT AGENT RUNTIME & WORKFLOW DAG CONTROLS
+    # -------------------------------------------------------------
+    from upsc_studio.agents.runtime import AgentWorkflowRuntime
+    from upsc_studio.automation.maintenance import SystemMaintenanceEngine
+
+    workflow_runtime = AgentWorkflowRuntime(conn, resolved_projects)
+    maintenance_engine = SystemMaintenanceEngine(conn, resolved_projects)
+
+    @app.get("/api/workflow/dag")
+    def get_workflow_dag() -> dict:
+        return workflow_runtime.get_workflow_dag()
+
+    @app.post("/api/workflow/start")
+    def start_project_workflow(payload: dict) -> dict:
+        project_id = payload.get("project_id")
+        content_pillar = payload.get("content_pillar", "UPSC_CIVIL_SERVICES")
+        duration = int(payload.get("target_duration_min", 15))
+        if not project_id:
+            raise HTTPException(status_code=400, detail="project_id is required.")
+
+        run_id = workflow_runtime.create_or_get_workflow(
+            project_id=project_id,
+            content_pillar=content_pillar,
+            target_duration_min=duration,
+        )
+        # Execute workflow
+        res = workflow_runtime.execute_workflow(run_id)
+        return res
+
+    @app.post("/api/workflow/{run_id}/pause")
+    def pause_project_workflow(run_id: str) -> dict:
+        ok = workflow_runtime.pause_workflow(run_id)
+        return {"run_id": run_id, "paused": ok}
+
+    @app.post("/api/workflow/{run_id}/resume")
+    def resume_project_workflow(run_id: str) -> dict:
+        return workflow_runtime.resume_workflow(run_id)
+
+    @app.get("/api/workflow/{run_id}/status")
+    def get_project_workflow_status(run_id: str) -> dict:
+        return workflow_runtime.get_workflow_status(run_id)
+
+    @app.post("/api/workflow/recover")
+    def recover_interrupted_workflows() -> dict:
+        recovered = workflow_runtime.recover_interrupted_workflows()
+        return {"recovered_items_count": len(recovered), "recovered_items": recovered}
+
+    @app.get("/api/automation/health")
+    def get_system_health() -> dict:
+        return maintenance_engine.run_system_health_audit()
 
     return app

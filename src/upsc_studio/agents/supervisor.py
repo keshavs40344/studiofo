@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from upsc_studio.agents.contracts import AGENT_REGISTRY, AgentStatus, AgentTaskResult
+from upsc_studio.agents.runtime import AgentWorkflowRuntime
 from upsc_studio.pipeline.job_manifest import JobManifestManager
 from upsc_studio.pipeline.orchestrator import ChapterPipeline
 from upsc_studio.projects.manager import ProjectManager
@@ -18,12 +19,13 @@ from upsc_studio.publishing.youtube_publisher import YouTubePublisher
 
 
 class ExecutiveProducer:
-    """Central supervisor coordinating all 24 production agents via dependency graph with retries and checkpoints."""
+    """Central supervisor coordinating all 24 production agents via persistent SQLite runtime with retries and checkpoints."""
 
     def __init__(self, conn: sqlite3.Connection, projects_root: Path) -> None:
         self.conn = conn
         self.projects_root = projects_root
         self.mgr = ProjectManager(conn, projects_root)
+        self.runtime = AgentWorkflowRuntime(conn, projects_root)
 
     @staticmethod
     def run_with_retry(

@@ -125,3 +125,22 @@ class UniversalVisualDirector:
             motion_duration_sec=6.5,
             primary_elements=["Individual Liberty Sanctuary", "State Executive Vector", "Articles 12-13 Boundary", "Article 32 Writ Shield"],
         )
+
+    def get_domain_visual_guidelines(self, topic_title: str) -> dict[str, Any]:
+        """Derive visual archetype guidelines and motion parameters for a topic."""
+        spec = self.plan_visual_for_concept(
+            scene_id="GUIDELINE_SCENE",
+            concept_title=topic_title,
+            domain_category=topic_title,
+            narration_text=topic_title,
+        )
+        return {
+            "topic_title": topic_title,
+            "recommended_archetype": spec.archetype.value,
+            "visual_summary": spec.visual_summary,
+            "on_screen_dynamics": spec.on_screen_dynamics,
+            "illustrative_label": spec.illustrative_label,
+            "primary_elements": spec.primary_elements,
+            "misconception_prevented": spec.misconception_prevented,
+            "motion_duration_sec": spec.motion_duration_sec,
+        }
