@@ -89,11 +89,50 @@ class QAAuditor:
             blockers.append("No syllabus coverage mapping recorded.")
 
         claims = self.conn.execute(
-            "SELECT id, status FROM claims WHERE project_id = ?", (project_id,)
+            """
+            SELECT c.id, c.status, c.source_id, s.source_tier, s.url
+            FROM claims AS c
+            LEFT JOIN sources AS s ON s.id = c.source_id
+            WHERE c.project_id = ?
+            ORDER BY c.id
+            """,
+            (project_id,),
         ).fetchall()
+        if not claims:
+            blockers.append("No factual claims have been entered for academic review.")
         bad_claims = [c["id"] for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
         if bad_claims:
             blockers.append(f"{len(bad_claims)} claim(s) are not VERIFIED: {', '.join(bad_claims[:5])}")
+
+        claims_without_external_source = [
+            c["id"] for c in claims
+            if c["status"] == VerificationStatus.VERIFIED.value
+            and (
+                not c["source_id"]
+                or not c["source_tier"]
+                or c["source_tier"] == "USER_NOTES"
+                or not c["url"]
+                or not str(c["url"]).strip()
+            )
+        ]
+        if claims_without_external_source:
+            blockers.append(
+                "Verified claims without an external source URL: "
+                + ", ".join(claims_without_external_source[:5])
+            )
+
+        external_source_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS c FROM sources
+            WHERE project_id = ?
+              AND source_tier <> 'USER_NOTES'
+              AND url IS NOT NULL
+              AND TRIM(url) <> ''
+            """,
+            (project_id,),
+        ).fetchone()["c"]
+        if external_source_count == 0:
+            blockers.append("No non-user research source with a URL is recorded.")
 
         for req_file in ("teaching/script_hinglish.md", "teaching/study_notes.md", "teaching/question_bank.json"):
             if not (self.project_dir / req_file).exists():
