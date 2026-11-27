@@ -371,7 +371,13 @@ class ExecutiveProducer:
 
         production_row = by_logical_id.get("production", {})
         production_output = json.loads(production_row.get("output_json") or "{}")
-        pipe_out = context.get("pipe_out") or production_output
+        pipe_out = context.get("pipe_out")
+        if pipe_out is None:
+            # Runtime output.status tracks task completion; pipeline_status tracks product state.
+            pipe_out = dict(production_output)
+            pipe_out["status"] = production_output.get(
+                "pipeline_status", production_output.get("status", "UNKNOWN")
+            )
         editorial_row = by_logical_id.get("editorial", {})
         editorial_output = json.loads(editorial_row.get("output_json") or "{}")
         publication_row = by_logical_id.get("publication", {})
