@@ -63,7 +63,7 @@ class ExecutiveProducer:
                 )
             except Exception as exc:
                 errors.append(str(exc))
-                transient = isinstance(exc, (TimeoutError, ConnectionError))
+                transient = isinstance(exc, (TimeoutError, ConnectionError)) or "timeout" in str(exc).lower()
                 if retry_safe and transient and attempt < effective_retries:
                     time.sleep(0.2 * (2**attempt))
                 else:
