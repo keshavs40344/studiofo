@@ -26,7 +26,8 @@ from upsc_studio.db.schemas import (
     VerificationStatus,
     utc_now_iso,
 )
-from upsc_studio.agents.runtime import AgentTaskStore\nfrom upsc_studio.agents.supervisor import ExecutiveProducer
+from upsc_studio.agents.runtime import AgentTaskStore
+from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
 from upsc_studio.research.verifier import EvidenceEngine
