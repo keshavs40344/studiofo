@@ -151,6 +151,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <textarea id="review-notes" rows="2" placeholder="List any issues or corrections..."></textarea>
           <button class="secondary" onclick="saveManualReview()">Save Manual Review</button>
         </div>
+        <h3>Production Stage Status</h3>
+        <div id="pipeline-stages"><p>No production run recorded.</p></div>
         <h3>Pipeline Output & Diagnostics</h3>
         <pre id="w-output">Select or run a project to inspect deliverables.</pre>
       </div>
@@ -228,6 +230,15 @@ async function openProject(id) {
   document.getElementById('review-visuals').checked = reviewCurrent && checks.visual_relevance === true;
   document.getElementById('review-subtitles').checked = reviewCurrent && checks.voice_subtitle_alignment === true;
   document.getElementById('review-playback').checked = reviewCurrent && checks.final_playback_inspection === true;
+  const stageRows = data.pipeline_tasks || [];
+  document.getElementById('pipeline-stages').innerHTML = stageRows.length
+    ? stageRows.map(stage => `<div class="proj-item">
+        <strong>${stage.stage_name}</strong>
+        <span class="badge ${stage.status}">${stage.status}</span><br/>
+        <small>Attempts: ${stage.attempts} · Updated: ${stage.updated_at || 'not started'}</small>
+        ${stage.error ? `<p>${stage.error}</p>` : ''}
+      </div>`).join('')
+    : '<p>No production stages have been run yet.</p>';
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
   await loadResearch();
 }
@@ -443,12 +454,54 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             )
         ):
             proj = mgr.update_status(project_id, ProjectStatus.NEEDS_REVIEW)
+        pipeline_tasks: list[dict] = []
+        task_table_exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_tasks'"
+        ).fetchone()
+        if task_table_exists:
+            rows = conn.execute(
+                """
+                SELECT task_id, handler, status, attempts, error, updated_at, created_at
+                FROM agent_tasks
+                WHERE workflow_id = ?
+                ORDER BY updated_at DESC, created_at DESC
+                """,
+                (f"chapter-pipeline:{project_id}",),
+            ).fetchall()
+            latest_by_handler: dict[str, dict] = {}
+            stage_names = {
+                "pipeline_ingestion": "1. Input ingestion",
+                "pipeline_academic": "2. Academic research & evidence",
+                "pipeline_teaching": "3. Teaching script & study material",
+                "pipeline_visuals": "4. Storyboard & visual production",
+                "pipeline_voice": "5. Voice & subtitles",
+                "pipeline_render": "6. Video rendering",
+                "pipeline_qa": "7. Quality assurance",
+            }
+            for row in rows:
+                handler = row["handler"]
+                if handler in stage_names and handler not in latest_by_handler:
+                    latest_by_handler[handler] = {
+                        "task_id": row["task_id"],
+                        "handler": handler,
+                        "stage_name": stage_names[handler],
+                        "status": row["status"],
+                        "attempts": row["attempts"],
+                        "error": row["error"],
+                        "updated_at": row["updated_at"],
+                    }
+            pipeline_tasks = [
+                latest_by_handler[key]
+                for key in stage_names
+                if key in latest_by_handler
+            ]
         return {
             "project": proj.model_dump(),
             "qa_gates": gates,
             "ten_gates": ten_gates,
             "claims_count": claims_count,
             "manual_review": manual_review,
+            "pipeline_tasks": pipeline_tasks,
         }
 
     @app.post("/api/projects/{project_id}/run")
