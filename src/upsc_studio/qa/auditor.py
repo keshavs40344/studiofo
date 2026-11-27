@@ -82,11 +82,19 @@ class QAAuditor:
 
     def _check_academic(self, project_id: str) -> dict:
         blockers: list[str] = []
+        project_row = self.conn.execute(
+            "SELECT content_category FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        content_category = project_row["content_category"] if project_row else "upsc"
         cov_rows = self.conn.execute(
             "SELECT status FROM coverage_ledger WHERE project_id = ?", (project_id,)
         ).fetchall()
-        if not cov_rows:
-            blockers.append("No syllabus coverage mapping recorded.")
+        if content_category == "upsc" and not cov_rows:
+            blockers.append("No UPSC syllabus coverage mapping recorded.")
+        elif content_category != "upsc":
+            topic_map_path = self.project_dir / "research" / "topic_map.json"
+            if not topic_map_path.is_file():
+                blockers.append("Category topic map is missing.")
 
         claims = self.conn.execute(
             """
@@ -134,8 +142,19 @@ class QAAuditor:
         if external_source_count == 0:
             blockers.append("No non-user research source with a URL is recorded.")
 
-        for req_file in ("teaching/script_hinglish.md", "teaching/study_notes.md", "teaching/question_bank.json"):
-            if not (self.project_dir / req_file).exists():
+        common_required_files = (
+            "teaching/script_hinglish.md",
+            "teaching/study_notes.md",
+            "teaching/question_bank.json",
+        )
+        category_required_files = (
+            ("teaching/prelims_track.md", "teaching/mains_track.md")
+            if content_category == "upsc"
+            else ("teaching/topic_context.md", "teaching/analysis_framework.md")
+        )
+        for req_file in (*common_required_files, *category_required_files):
+            target = self.project_dir / req_file
+            if not target.is_file() or target.stat().st_size == 0:
                 blockers.append(f"Missing required teaching deliverable: {req_file}")
 
         return {
