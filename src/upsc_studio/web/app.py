@@ -325,7 +325,20 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         project_dir = Path(proj.root_dir)
         review_path = project_dir / "qa" / "manual_review.json"
         review_path.parent.mkdir(parents=True, exist_ok=True)
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        scenes: list[SceneSpec] = []
+        if storyboard_path.is_file():
+            try:
+                raw_scenes = json.loads(storyboard_path.read_text(encoding="utf-8"))
+                scenes = [SceneSpec.model_validate(item) for item in raw_scenes]
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                raise HTTPException(status_code=400, detail=f"Storyboard cannot be reviewed: {exc}") from exc
+        final_video = project_dir / "render" / "final" / "final_video.mp4"
+        final_video_arg = final_video if final_video.is_file() else None
+        auditor = TenGateAuditor(conn, project_dir)
+        artifact_fingerprint = auditor.review_fingerprint(project_id, scenes, final_video_arg)
         review = {
+            "artifact_fingerprint": artifact_fingerprint,
             "reviewer": payload.reviewer,
             "checks": {
                 "teaching_clarity": payload.teaching_clarity,
@@ -340,17 +353,10 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         temp_path.write_text(json.dumps(review, indent=2, ensure_ascii=False), encoding="utf-8")
         temp_path.replace(review_path)
         response = {"manual_review": review}
-        storyboard_path = project_dir / "storyboard" / "storyboard.json"
         if storyboard_path.is_file():
-            try:
-                raw_scenes = json.loads(storyboard_path.read_text(encoding="utf-8"))
-                scenes = [SceneSpec.model_validate(item) for item in raw_scenes]
-                final_video = project_dir / "render" / "final" / "final_video.mp4"
-                response["ten_gates"] = TenGateAuditor(conn, project_dir).run_ten_gates(
-                    project_id, scenes, final_video if final_video.is_file() else None
-                )
-            except (OSError, ValueError, json.JSONDecodeError) as exc:
-                response["qa_error"] = f"Review saved, but QA report could not be refreshed: {exc}"
+            response["ten_gates"] = auditor.run_ten_gates(
+                project_id, scenes, final_video_arg
+            )
         return response
 
     @app.post("/api/projects/{project_id}/backup")
