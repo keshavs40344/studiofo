@@ -57,3 +57,49 @@ def test_srt_slice_retimes_only_overlapping_subtitle_cues(tmp_path: Path) -> Non
     assert "Opening" in rendered
     assert "Main point" in rendered
     assert "Closing" in rendered
+
+
+def test_shorts_renderer_creates_vertical_manifest_and_sidecar_srt(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(shorts_module, "find_ffmpeg", lambda: "ffmpeg-test")
+    commands = []
+
+    def fake_run(command, **kwargs):
+        commands.append(command)
+        Path(command[-1]).parent.mkdir(parents=True, exist_ok=True)
+        Path(command[-1]).write_bytes(b"fake-ffmpeg-output")
+
+    monkeypatch.setattr(shorts_module.subprocess, "run", fake_run)
+    project = tmp_path / "project"
+    renderer = ShortsRenderer(project)
+    renderer.scene_dir.mkdir(parents=True, exist_ok=True)
+    scene = SceneSpec(
+        scene_id="SCN_01",
+        section_id="SEC_01",
+        section_title="A sourced principle",
+        learning_objective="Explain the evidence",
+        narration_text="A source-backed point.",
+        claim_ids=["clm_1"],
+        estimated_duration_sec=18.0,
+        visual_category="Diagram",
+        primary_asset="unused.png",
+        on_screen_title="The principle",
+    )
+    (renderer.scene_dir / "SCN_01.mp4").write_bytes(b"fake-scene")
+    narration = project / "audio.wav"
+    narration.parent.mkdir(parents=True, exist_ok=True)
+    narration.write_bytes(b"fake-audio")
+    subtitles = project / "subtitles.srt"
+    subtitles.parent.mkdir(parents=True, exist_ok=True)
+    subtitles.write_text(
+        "1\n00:00:00,000 --> 00:00:18,000\nA source-backed point.\n",
+        encoding="utf-8",
+    )
+    candidates = ShortsRenderer.build_candidates([scene], "Chapter")
+    result = renderer.render(
+        "project-1", candidates, [scene], narration, subtitles,
+    )
+    assert result["rendered_count"] == 1
+    assert result["shorts"][0]["resolution"] == "1080x1920"
+    assert Path(result["shorts"][0]["video_path"]).is_file()
+    assert Path(result["shorts"][0]["subtitles_path"]).is_file()
+    assert len(commands) == 4
