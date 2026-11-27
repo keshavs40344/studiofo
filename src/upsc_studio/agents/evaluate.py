@@ -195,13 +195,20 @@ def run_evaluation() -> int:
             pub_date="2024-01-01",
         )
         # Add one verified claim and one unsupported claim
-        ev_engine.add_claim(
+        supported_claim_id = ev_engine.add_claim(
             project_id=proj.id,
             statement="Article 14 guarantees equality before the law within the territory of India.",
             chapter_section="Equality",
             source_id=s_id,
             page_or_section="Article 14",
             ref_period="2024",
+        )
+        ev_engine.verify_claim_against_source(
+            claim_id=supported_claim_id,
+            source_id=s_id,
+            page_or_section="Article 14",
+            evidence_excerpt="The State shall not deny to any person equality before the law or equal protection of the laws.",
+            reviewer_id="evaluation-fixture-reviewer",
         )
         ev_engine.add_claim(
             project_id=proj.id,
