@@ -32,6 +32,22 @@ HIGH_IMPACT_PATTERNS = (
 )
 
 
+def has_human_evidence_attestation(claim: dict[str, Any]) -> bool:
+    """Return whether a VERIFIED claim has an explicit reviewer label and source excerpt."""
+    notes = str(claim.get("verification_notes") or "")
+    excerpt_marker = "Evidence excerpt:"
+    excerpt = notes.split(excerpt_marker, 1)[1].strip() if excerpt_marker in notes else ""
+    return bool(
+        claim.get("status") == VerificationStatus.VERIFIED.value
+        and notes.startswith("HUMAN_ATTESTED_BY:")
+        and notes.splitlines()
+        and notes.splitlines()[0].partition(":")[2].strip()
+        and claim.get("source_id")
+        and str(claim.get("page_or_section") or "").strip()
+        and len(excerpt) >= 10
+    )
+
+
 class EvidenceEngine:
     """Manages sources, atomic claims, verification statuses, conflict detection, and fact gates.
     
@@ -273,10 +289,21 @@ class EvidenceEngine:
         counts: dict[str, int] = {s.value: 0 for s in VerificationStatus}
         unresolved: list[dict[str, Any]] = []
         for c in claims:
+            if c["status"] == VerificationStatus.VERIFIED.value and not has_human_evidence_attestation(c):
+                c["status"] = VerificationStatus.HUMAN_REVIEW_REQUIRED.value
+                c["verification_notes"] = (
+                    (c.get("verification_notes") or "")
+                    + "\\nExport gate: VERIFIED status downgraded because no human attestation excerpt is recorded."
+                )
+                self.conn.execute(
+                    "UPDATE claims SET status = ?, verification_notes = ? WHERE id = ?",
+                    (c["status"], c["verification_notes"], c["id"]),
+                )
             st = c["status"]
             counts[st] = counts.get(st, 0) + 1
             if st != VerificationStatus.VERIFIED.value:
                 unresolved.append(c)
+        self.conn.commit()
 
         conflicts = self.detect_conflicts(project_id)
 
