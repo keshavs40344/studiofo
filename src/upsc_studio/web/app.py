@@ -14,10 +14,21 @@ from fastapi.responses import FileResponse, HTMLResponse
 from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
-from upsc_studio.db.schemas import (\n    ClaimVerificationRequest, ManualQAReview, ProjectCreate, ProjectStatus,\n    ResearchClaimCreate, ResearchSourceCreate, SceneSpec, VerificationStatus, utc_now_iso,\n)
+from upsc_studio.db.schemas import (
+    ClaimVerificationRequest,
+    ManualQAReview,
+    ProjectCreate,
+    ProjectStatus,
+    ResearchClaimCreate,
+    ResearchSourceCreate,
+    SceneSpec,
+    VerificationStatus,
+    utc_now_iso,
+)
 from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
-from upsc_studio.qa.ten_gates import TenGateAuditor\nfrom upsc_studio.research.verifier import EvidenceEngine
+from upsc_studio.qa.ten_gates import TenGateAuditor
+from upsc_studio.research.verifier import EvidenceEngine
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
