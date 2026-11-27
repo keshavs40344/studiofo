@@ -206,14 +206,48 @@ class StagedChapterPipeline:
                 "research_cutoff_date": topic_map["research_cutoff_date"],
             }
         evidence = EvidenceEngine(self.conn, project_dir)
-        if notes.strip():
-            source_id = evidence.add_source(
-                project_id=project_id, title=f"User Notes for {project.chapter_title}",
-                publisher="Project User", source_tier="USER_NOTES",
-            )
+        note_source_title = f"User Notes for {project.chapter_title}"
+        note_sources = self.conn.execute(
+            """
+            SELECT id, notes FROM sources
+            WHERE project_id = ? AND title = ? AND publisher = 'Project User'
+              AND source_tier = 'USER_NOTES'
+            ORDER BY access_date, id
+            """,
+            (project_id, note_source_title),
+        ).fetchall()
+        note_digest = hashlib.sha256(notes.encode("utf-8")).hexdigest()
+        if not notes.strip():
+            for old_source in note_sources:
+                self.conn.execute("DELETE FROM claims WHERE source_id = ?", (old_source["id"],))
+                self.conn.execute("DELETE FROM sources WHERE id = ?", (old_source["id"],))
+            self.conn.commit()
+        else:
+            if note_sources:
+                source_id = note_sources[0]["id"]
+                if note_sources[0]["notes"] != note_digest:
+                    self.conn.execute("DELETE FROM claims WHERE source_id = ?", (source_id,))
+                    self.conn.execute(
+                        "UPDATE sources SET notes = ? WHERE id = ?", (note_digest, source_id)
+                    )
+                    self.conn.commit()
+                for duplicate in note_sources[1:]:
+                    self.conn.execute("DELETE FROM claims WHERE source_id = ?", (duplicate["id"],))
+                    self.conn.execute("DELETE FROM sources WHERE id = ?", (duplicate["id"],))
+                self.conn.commit()
+            else:
+                source_id = evidence.add_source(
+                    project_id=project_id,
+                    title=note_source_title,
+                    publisher="Project User",
+                    source_tier="USER_NOTES",
+                    notes=note_digest,
+                )
             evidence.extract_claims_from_text(
-                project_id=project_id, chapter_section="User Supplied Notes",
-                text=notes, default_source_id=source_id,
+                project_id=project_id,
+                chapter_section="User Supplied Notes",
+                text=notes,
+                default_source_id=source_id,
             )
         ledger = evidence.export_ledger(project_id, project.cutoff_date)
         report = {"chapter_map": chapter_map, "evidence_summary": ledger["status_counts"]}
