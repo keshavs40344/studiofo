@@ -60,6 +60,36 @@ def _read_json(path: Path) -> Any:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _external_evidence_fingerprint(conn: sqlite3.Connection, project_id: str) -> str:
+    """Fingerprint manually registered research; ignore pipeline-generated user-note records."""
+    sources = [
+        dict(row) for row in conn.execute(
+            """
+            SELECT id, title, publisher, url, pub_date, source_tier
+            FROM sources
+            WHERE project_id = ? AND source_tier <> 'USER_NOTES'
+            ORDER BY id
+            """,
+            (project_id,),
+        ).fetchall()
+    ]
+    claims = [
+        dict(row) for row in conn.execute(
+            """
+            SELECT c.id, c.statement, c.chapter_section, c.source_id,
+                   c.page_or_section, c.ref_period, c.status, c.verification_notes
+            FROM claims AS c
+            LEFT JOIN sources AS s ON s.id = c.source_id
+            WHERE c.project_id = ?
+              AND (c.source_id IS NULL OR s.source_tier <> 'USER_NOTES')
+            ORDER BY c.id
+            """,
+            (project_id,),
+        ).fetchall()
+    ]
+    return _fingerprint({"sources": sources, "claims": claims})
+
+
 class StagedChapterPipeline:
     """Execute resumable ingestion, academic, teaching, visuals, voice, render and QA stages."""
 
@@ -435,7 +465,13 @@ class StagedChapterPipeline:
             "target_duration_min": project.target_duration_min,
             "tts_enabled": project.tts_enabled,
         }
-        academic_fp = _fingerprint({"notes": notes_fp, "project": project_facts, "version": PIPELINE_STAGE_VERSION})
+        evidence_fp = _external_evidence_fingerprint(self.conn, project_id)
+        academic_fp = _fingerprint({
+            "notes": notes_fp,
+            "project": project_facts,
+            "external_evidence": evidence_fp,
+            "version": PIPELINE_STAGE_VERSION,
+        })
         teaching_fp = _fingerprint({"academic": academic_fp, "profile_data": SpecialistProfileEngine().version,
                                     "duration": project.target_duration_min})
         visuals_fp = _fingerprint({"teaching": teaching_fp, "visual_schema": PIPELINE_STAGE_VERSION})
