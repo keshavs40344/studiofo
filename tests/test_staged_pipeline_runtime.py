@@ -130,7 +130,6 @@ def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
                            encoding="utf-8")
     fourth = pipeline.run_staged(
         project.id, typed_notes="Federalism distributes constitutional powers.",
-        voice_path=recording,
     )
     assert fourth["status"] == ProjectStatus.APPROVED.value
     assert calls == {"ingestion": 1, "academic": 1, "teaching": 1,
@@ -149,7 +148,6 @@ def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
     )
     fifth = pipeline.run_staged(
         project.id, typed_notes="Federalism distributes constitutional powers.",
-        voice_path=recording,
     )
     assert fifth["status"] == ProjectStatus.APPROVED.value
     assert calls == {"ingestion": 1, "academic": 2, "teaching": 2,
