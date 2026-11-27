@@ -114,9 +114,10 @@ def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
 
     recording = tmp_path / "creator_voice.wav"
     recording.write_bytes(b"test voice input")
+    # Voice-only continuation deliberately omits the notes fields; the saved
+    # project input bundle must be restored and upstream fingerprints must remain stable.
     third = pipeline.run_staged(
-        project.id, typed_notes="Federalism distributes constitutional powers.",
-        voice_path=recording,
+        project.id, voice_path=recording,
     )
     assert third["status"] == ProjectStatus.APPROVED.value
     assert calls == {"ingestion": 1, "academic": 1, "teaching": 1,
