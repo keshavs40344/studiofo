@@ -127,10 +127,54 @@ class StagedChapterPipeline:
     def _stage_academic(self, project_id: str, project_dir: Path, paths: dict[str, Path],
                         project: Any) -> dict[str, Any]:
         notes = paths["notes"].read_text(encoding="utf-8") if paths["notes"].is_file() else ""
-        chapter_map = SyllabusEngine(self.conn).map_chapter(
-            project_id=project_id, project_dir=project_dir,
-            chapter_title=project.chapter_title, notes_text=notes,
-        )
+        if project.content_category == "upsc":
+            chapter_map = SyllabusEngine(self.conn).map_chapter(
+                project_id=project_id, project_dir=project_dir,
+                chapter_title=project.chapter_title, notes_text=notes,
+            )
+            category_map_path = project_dir / "research" / "topic_map.json"
+            category_map_path.unlink(missing_ok=True)
+        else:
+            # Non-UPSC categories use a topic map, not a fabricated UPSC syllabus match.
+            headings = [
+                line.lstrip("#").strip()
+                for line in notes.splitlines()
+                if line.lstrip().startswith("#") and line.lstrip("#").strip()
+            ]
+            claim_sections = [
+                row["chapter_section"] for row in self.conn.execute(
+                    "SELECT DISTINCT chapter_section FROM claims WHERE project_id = ? ORDER BY chapter_section",
+                    (project_id,),
+                ).fetchall()
+            ]
+            topic_names = list(dict.fromkeys([project.chapter_title, *headings, *claim_sections]))
+            topic_map = {
+                "project_id": project_id,
+                "content_category": project.content_category,
+                "topic_title": project.chapter_title,
+                "topics": [
+                    {"title": title, "coverage_status": "REVIEW_REQUIRED",
+                     "basis": "project_title_or_supplied_material_heading"}
+                    for title in topic_names
+                ],
+                "coverage_status": "REVIEW_REQUIRED",
+                "scope_review_required": True,
+                "research_cutoff_date": (
+                    project.cutoff_date if project.content_category == "current_affairs" else None
+                ),
+            }
+            category_map_path = project_dir / "research" / "topic_map.json"
+            _write_json(category_map_path, topic_map)
+            chapter_map = {
+                "project_id": project_id,
+                "chapter_title": project.chapter_title,
+                "content_category": project.content_category,
+                "primary_papers": [],
+                "topic_dimensions": topic_map["topics"],
+                "topic_map_path": str(category_map_path),
+                "scope_review_required": True,
+                "research_cutoff_date": topic_map["research_cutoff_date"],
+            }
         evidence = EvidenceEngine(self.conn, project_dir)
         if notes.strip():
             source_id = evidence.add_source(
@@ -149,18 +193,33 @@ class StagedChapterPipeline:
 
     def _stage_teaching(self, project_id: str, project_dir: Path, paths: dict[str, Path],
                         chapter_map: dict[str, Any]) -> dict[str, Any]:
-        specialist_key, specialist_profile = SpecialistProfileEngine().select_profile(
-            self.project_mgr.get_project(project_id).chapter_title,
-            chapter_map.get("primary_papers", []),
-        )
         project = self.project_mgr.get_project(project_id)
-        matched_pyqs = PYQEngine().match_chapter(project.chapter_title)
+        if project.content_category == "upsc":
+            specialist_key, specialist_profile = SpecialistProfileEngine().select_profile(
+                project.chapter_title, chapter_map.get("primary_papers", []),
+            )
+            matched_pyqs = PYQEngine().match_chapter(project.chapter_title)
+        else:
+            category_labels = {
+                "general_knowledge": "General Knowledge",
+                "current_affairs": "Current Affairs",
+                "deep_dive": "Deep Dive",
+            }
+            specialist_key = f"{project.content_category.upper()}_EDITORIAL_PROFILE"
+            specialist_profile = {
+                "category": project.content_category,
+                "label": category_labels[project.content_category],
+                "exam_syllabus_mapping": "NOT_APPLICABLE",
+                "source_review_required": True,
+            }
+            matched_pyqs = []
         engine = TeachingEngine(self.conn, project_dir)
         notes = paths["notes"].read_text(encoding="utf-8") if paths["notes"].is_file() else ""
         teaching_summary = engine.generate_teaching_package(
             project_id=project_id, chapter_title=project.chapter_title, chapter_map=chapter_map,
             notes_excerpt=notes, tts_enabled=project.tts_enabled,
             target_duration_min=project.target_duration_min,
+            content_category=project.content_category,
         )
         duration = DurationPlanner(engine.WORDS_PER_MINUTE).build_schedule(
             project_dir=project_dir, sections=teaching_summary["sections"],
@@ -193,7 +252,11 @@ class StagedChapterPipeline:
         visuals = ExtendedVisualSystems(project_dir, rights)
 
         for scene in scenes:
-            if scene.scene_id == "SCN_02":
+            if project.content_category != "upsc":
+                # Do not inject Constitution-specific maps or institutional labels into other categories.
+                asset = graphics.generate_scene_graphic(project_id, project.chapter_title, scene)
+                scene.primary_asset = str(asset)
+            elif scene.scene_id == "SCN_02":
                 asset = maps.render_institutional_map(
                     project_id, scene.scene_id, f"{project.chapter_title}: Institutional Scope",
                     [("Constitutional Basis", "Articles / Schedules"),
@@ -365,8 +428,13 @@ class StagedChapterPipeline:
             voice_ref = {"name": resolved_voice.name, "size": resolved_voice.stat().st_size,
                          "sha256": sha256_file(resolved_voice)}
         paths = self._paths(project_dir)
-        project_facts = {"chapter_title": project.chapter_title, "cutoff_date": project.cutoff_date,
-                         "target_duration_min": project.target_duration_min, "tts_enabled": project.tts_enabled}
+        project_facts = {
+            "chapter_title": project.chapter_title,
+            "content_category": project.content_category,
+            "cutoff_date": project.cutoff_date,
+            "target_duration_min": project.target_duration_min,
+            "tts_enabled": project.tts_enabled,
+        }
         academic_fp = _fingerprint({"notes": notes_fp, "project": project_facts, "version": PIPELINE_STAGE_VERSION})
         teaching_fp = _fingerprint({"academic": academic_fp, "profile_data": SpecialistProfileEngine().version,
                                     "duration": project.target_duration_min})
