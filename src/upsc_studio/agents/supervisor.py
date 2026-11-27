@@ -472,7 +472,8 @@ class ExecutiveProducer:
 
         if production_row:
             prod_status = production_row.get("status")
-            if prod_status == "COMPLETED":
+            product_status = pipe_out.get("pipeline_status", pipe_out.get("status"))
+            if prod_status == "COMPLETED" and product_status == "APPROVED":
                 agent_states["AGENT_01"] = registry_state(
                     "AGENT_01",
                     AgentStatus.COMPLETED,
@@ -480,7 +481,20 @@ class ExecutiveProducer:
                     output_refs=[
                         str(pipe_out.get("recording_script"))
                     ] if pipe_out.get("recording_script") else [],
-                    metadata={"runtime_task_status": prod_status, "pipeline_status": pipe_out.get("pipeline_status", pipe_out.get("status"))},
+                    metadata={"runtime_task_status": prod_status, "pipeline_status": product_status},
+                )
+            elif prod_status == "COMPLETED" and product_status in {
+                "WAITING_FOR_VOICE", "NEEDS_REVIEW", "PROCESSING", "NOT_STARTED"
+            }:
+                reason = (
+                    pipe_out.get("voice_wait_reason")
+                    if product_status == "WAITING_FOR_VOICE"
+                    else f"Production requires continuation or review: {product_status}"
+                )
+                agent_states["AGENT_01"] = registry_state(
+                    "AGENT_01", AgentStatus.BLOCKED, production_row["task_id"],
+                    metadata={"runtime_task_status": prod_status, "pipeline_status": product_status},
+                    errors=[reason or "Production stage is not approved"],
                 )
             elif prod_status == "REVIEW_REQUIRED":
                 agent_states["AGENT_01"] = registry_state(
