@@ -99,12 +99,14 @@ class ExecutiveProducer:
         voice_path: Path | None,
         ai_narration: bool,
         content_category: str = "upsc",
+        evidence_fingerprint: str = "",
         manual_review_path: Path | None = None,
     ) -> str:
         """Hash inputs without storing their text or media bytes in the task payload."""
         inputs: dict[str, Any] = {
             "project_id": project_id,
             "content_category": content_category,
+            "research_evidence_sha256": evidence_fingerprint,
             "typed_notes_sha256": hashlib.sha256(typed_notes.encode("utf-8")).hexdigest(),
             "ai_narration": bool(ai_narration),
             "notes_files": [],
@@ -137,6 +139,40 @@ class ExecutiveProducer:
             json.dumps(inputs, sort_keys=True, ensure_ascii=False).encode("utf-8")
         ).hexdigest()
 
+    @staticmethod
+    def _research_evidence_fingerprint(conn: sqlite3.Connection, project_id: str) -> str:
+        """Hash user-added research/claims; exclude source records auto-created from notes."""
+        sources = [
+            dict(row) for row in conn.execute(
+                """
+                SELECT id, title, publisher, url, pub_date, source_tier
+                FROM sources
+                WHERE project_id = ? AND source_tier <> 'USER_NOTES'
+                ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        claims = [
+            dict(row) for row in conn.execute(
+                """
+                SELECT c.id, c.statement, c.chapter_section, c.source_id,
+                       c.page_or_section, c.ref_period, c.status, c.verification_notes
+                FROM claims AS c
+                LEFT JOIN sources AS s ON s.id = c.source_id
+                WHERE c.project_id = ?
+                  AND (c.source_id IS NULL OR s.source_tier <> 'USER_NOTES')
+                ORDER BY c.id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        payload = json.dumps(
+            {"sources": sources, "claims": claims},
+            sort_keys=True, ensure_ascii=False, default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
     def execute_task_graph(
         self,
         project_id: str,
@@ -157,9 +193,11 @@ class ExecutiveProducer:
         resolved_notes = [Path(item).expanduser().resolve() for item in (notes_files or [])]
         resolved_voice = Path(voice_path).expanduser().resolve() if voice_path is not None else None
         manual_review_path = project_dir / "qa" / "manual_review.json"
+        research_fingerprint = self._research_evidence_fingerprint(self.conn, project_id)
         fingerprint = self._input_fingerprint(
             project_id, resolved_notes, typed_notes, resolved_voice, ai_narration,
             content_category=project.content_category,
+            evidence_fingerprint=research_fingerprint,
             manual_review_path=manual_review_path,
         )
         workflow_id = f"production:{project_id}:{fingerprint[:24]}"
