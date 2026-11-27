@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import requests
 import uuid
 from pathlib import Path
@@ -189,6 +190,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <button class="secondary" onclick="prepareRetry()">Prepare Failed-Stage Retry</button>
           <p>After preparation, click Run Production again. Saved notes and voice recordings are reused when no new files are supplied.</p>
         </div>
+        <h3>Rendered Shorts</h3>
+        <div id="rendered-shorts"><p>No Shorts rendered yet.</p></div>
         <h3>Pipeline Output & Diagnostics</h3>
         <pre id="w-output">Select or run a project to inspect deliverables.</pre>
       </div>
@@ -298,6 +301,29 @@ async function openProject(id) {
         item.appendChild(error);
       }
       stageContainer.appendChild(item);
+    }
+  }
+  const shorts = (data.shorts_manifest || {}).shorts || [];
+  const shortsContainer = document.getElementById('rendered-shorts');
+  shortsContainer.replaceChildren();
+  if (!shorts.length) {
+    const emptyShorts = document.createElement('p');
+    emptyShorts.textContent = 'No Shorts rendered yet.';
+    shortsContainer.appendChild(emptyShorts);
+  } else {
+    for (const shortItem of shorts) {
+      const card = document.createElement('div');
+      card.className = 'proj-item';
+      const title = document.createElement('strong');
+      title.textContent = shortItem.title || shortItem.short_id;
+      const videoLink = document.createElement('a');
+      videoLink.href = `/api/projects/${currentProjectId}/shorts/${encodeURIComponent(shortItem.short_id)}/video`;
+      videoLink.textContent = 'Open MP4';
+      const srtLink = document.createElement('a');
+      srtLink.href = `/api/projects/${currentProjectId}/shorts/${encodeURIComponent(shortItem.short_id)}/subtitles`;
+      srtLink.textContent = 'Download SRT';
+      card.append(title, document.createElement('br'), videoLink, document.createTextNode(' · '), srtLink);
+      shortsContainer.appendChild(card);
     }
   }
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
@@ -606,6 +632,14 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                 for key in stage_names
                 if key in latest_by_handler
             ]
+        render_stage_path = Path(proj.root_dir) / "workflow" / "stages" / "render.json"
+        render_stage = {}
+        if render_stage_path.is_file():
+            try:
+                render_stage = json.loads(render_stage_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                render_stage = {"report_error": "Render-stage report is unreadable."}
+        shorts_manifest = render_stage.get("shorts_manifest") or {}
         return {
             "project": proj.model_dump(),
             "qa_gates": gates,
@@ -613,7 +647,49 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             "claims_count": claims_count,
             "manual_review": manual_review,
             "pipeline_tasks": pipeline_tasks,
+            "shorts_manifest": shorts_manifest,
         }
+
+    @app.get("/api/projects/{project_id}/shorts")
+    def list_project_shorts(project_id: str) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        manifest_path = Path(proj.root_dir) / "render" / "shorts" / "shorts_manifest.json"
+        if not manifest_path.is_file():
+            return {"status": "NO_SHORTS_RENDERED", "rendered_count": 0, "shorts": []}
+        try:
+            report = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=500, detail="Shorts manifest is unreadable.") from exc
+        return report
+
+    @app.get("/api/projects/{project_id}/shorts/{short_id}/video")
+    def download_project_short(project_id: str, short_id: str) -> FileResponse:
+        if not re.fullmatch(r"SHORT_\\d{2}", short_id):
+            raise HTTPException(status_code=400, detail="Invalid Short ID.")
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        path = Path(proj.root_dir) / "render" / "shorts" / f"{short_id}.mp4"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Rendered Short not found.")
+        return FileResponse(path, media_type="video/mp4", filename=f"{proj.slug}_{short_id}.mp4")
+
+    @app.get("/api/projects/{project_id}/shorts/{short_id}/subtitles")
+    def download_project_short_subtitles(project_id: str, short_id: str) -> FileResponse:
+        if not re.fullmatch(r"SHORT_\\d{2}", short_id):
+            raise HTTPException(status_code=400, detail="Invalid Short ID.")
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        path = Path(proj.root_dir) / "render" / "shorts" / f"{short_id}.srt"
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Short subtitles not found.")
+        return FileResponse(path, media_type="application/x-subrip", filename=f"{short_id}.srt")
 
     @app.post("/api/projects/{project_id}/run")
     def run_project_pipeline(
