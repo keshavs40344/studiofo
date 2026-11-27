@@ -453,14 +453,15 @@ class StagedChapterPipeline:
             and not ten_gates.get("pending_gates")
         )
         final_status = (
-            ProjectStatus.NEEDS_REVIEW
+            ProjectStatus.APPROVED
             if (
-                qa["academic"]["status"] != "PASSED"
-                or qa["rights"]["status"] != "PASSED"
-                or qa["media"]["status"] != "PASSED"
-                or not all_ten_gates_passed
+                qa["academic"]["status"] == "PASSED"
+                and qa["rights"]["status"] == "PASSED"
+                and qa["media"]["status"] == "PASSED"
+                and all_ten_gates_passed
+                and ten_gates.get("ready_for_publication") == "PASSED"
             )
-            else ProjectStatus.APPROVED
+            else ProjectStatus.NEEDS_REVIEW
         )
         self.project_mgr.update_status(project_id, final_status)
         report = {"pipeline_status": final_status.value, "qa": qa, "ten_gates": ten_gates}
@@ -584,15 +585,44 @@ class StagedChapterPipeline:
 
         if voice.get("pipeline_status") == ProjectStatus.WAITING_FOR_VOICE.value:
             final_status = ProjectStatus.WAITING_FOR_VOICE.value
+        elif workflow.get("status") in {"FAILED", "BLOCKED"}:
+            # A blocked required stage is not a successful or indefinitely processing run.
+            final_status = ProjectStatus.FAILED.value
         elif qa.get("pipeline_status"):
             final_status = qa["pipeline_status"]
         elif workflow.get("status") == "REVIEW_REQUIRED":
             final_status = ProjectStatus.NEEDS_REVIEW.value
-        elif workflow.get("status") in {"FAILED", "BLOCKED"}:
-            # A blocked required stage is not a successful or indefinitely processing run.
-            final_status = ProjectStatus.FAILED.value
         else:
             final_status = ProjectStatus.PROCESSING.value
+
+        # Keep a prior human approval only while its exact reviewed artifacts and
+        # evidence are unchanged. A cached QA report alone cannot preserve approval.
+        if (
+            project.status == ProjectStatus.APPROVED
+            and final_status == ProjectStatus.NEEDS_REVIEW.value
+        ):
+            approval_path = project_dir / "qa" / "final_10_gate_report.json"
+            manual_review_path = project_dir / "qa" / "manual_review.json"
+            try:
+                approval_report = _read_json(approval_path)
+                manual_review = _read_json(manual_review_path)
+                scenes = self._scene_specs(project_dir)
+                manifest = render.get("render_manifest") or {}
+                final_video_value = manifest.get("final_video")
+                final_video = Path(final_video_value) if final_video_value else None
+                current_fingerprint = TenGateAuditor(
+                    self.conn, project_dir
+                ).review_fingerprint(project_id, scenes, final_video)
+                approval_is_current = (
+                    approval_report.get("ready_for_publication") == "PASSED"
+                    and manual_review.get("artifact_fingerprint") == current_fingerprint
+                    and approval_report.get("gate_details", {}).get("MANUAL_REVIEW", {}).get("review_is_current") is True
+                )
+                if approval_is_current:
+                    final_status = ProjectStatus.APPROVED.value
+            except (FileNotFoundError, OSError, ValueError, KeyError, TypeError):
+                # Any missing/corrupt approval evidence returns the project to review.
+                pass
         if final_status in {
             ProjectStatus.WAITING_FOR_VOICE.value,
             ProjectStatus.APPROVED.value,
