@@ -456,6 +456,36 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         ).fetchone()["cnt"]
         return {"project": proj.model_dump(), "qa_gates": gates, "claims_count": claims_count}
 
+    @app.get("/api/projects/{project_id}/claims")
+    def list_project_claims(project_id: str) -> dict:
+        """List claims and their source metadata so a reviewer can inspect and attest them."""
+        try:
+            mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        rows = conn.execute(
+            """
+            SELECT c.id, c.statement, c.chapter_section, c.source_id, c.page_or_section,
+                   c.ref_period, c.status, c.verification_notes,
+                   s.title AS source_title, s.publisher AS source_publisher,
+                   s.url AS source_url, s.pub_date AS source_pub_date,
+                   s.source_tier AS source_tier
+            FROM claims c
+            LEFT JOIN sources s ON s.id = c.source_id
+            WHERE c.project_id = ?
+            ORDER BY c.id
+            """,
+            (project_id,),
+        ).fetchall()
+        claims = [dict(row) for row in rows]
+        return {
+            "project_id": project_id,
+            "total_claims": len(claims),
+            "pending_review": sum(1 for claim in claims if claim["status"] != "VERIFIED"),
+            "claims": claims,
+        }
+
     @app.post("/api/projects/{project_id}/claims/{claim_id}/attest")
     def attest_claim_evidence(project_id: str, claim_id: str, payload: dict) -> dict:
         """Record a reviewer-declared source excerpt; reviewer_id is an audit label, not authentication."""
