@@ -133,3 +133,23 @@ def test_dashboard_persists_manual_review_and_returns_it_on_project_detail(tmp_p
     detail = client.get(f"/api/projects/{project_id}")
     assert detail.status_code == 200
     assert detail.json()["manual_review"]["reviewer"] == "Creator"
+    assert detail.json()["manual_review"]["review_is_current"] is True
+
+    project_root = Path(tmp_path / "dashboard_projects")
+    project_dir = next(project_root.iterdir())
+    (project_dir / "qa" / "final_10_gate_report.json").write_text(
+        json.dumps({"ready_for_publication": "PASSED"}), encoding="utf-8"
+    )
+    second_conn = init_db(tmp_path / "dashboard.db")
+    second_conn.execute(
+        "UPDATE projects SET status = 'APPROVED' WHERE id = ?", (project_id,)
+    )
+    second_conn.commit()
+    current = client.get(f"/api/projects/{project_id}")
+    assert current.json()["project"]["status"] == "APPROVED"
+
+    # Any change to reviewed production artifacts automatically revokes APPROVED.
+    (project_dir / "storyboard" / "storyboard.json").write_text("[]", encoding="utf-8")
+    stale = client.get(f"/api/projects/{project_id}")
+    assert stale.json()["manual_review"]["review_is_current"] is False
+    assert stale.json()["project"]["status"] == "NEEDS_REVIEW"
