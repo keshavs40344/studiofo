@@ -116,6 +116,33 @@ class SceneSpec(BaseModel):
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class ResearchSourceCreate(BaseModel):
+    title: str = Field(..., min_length=3, max_length=300)
+    publisher: str = Field(..., min_length=2, max_length=200)
+    source_tier: Literal[
+        "PRIMARY_OFFICIAL", "ACADEMIC_PEER_REVIEWED", "REPUTABLE_NEWS", "OTHER"
+    ]
+    url: str = Field(..., min_length=8, max_length=2000)
+    pub_date: str | None = Field(default=None, max_length=40)
+    notes: str = Field(default="", max_length=3000)
+
+
+class ResearchClaimCreate(BaseModel):
+    statement: str = Field(..., min_length=20, max_length=3000)
+    chapter_section: str = Field(..., min_length=2, max_length=200)
+    source_id: str | None = None
+    page_or_section: str | None = Field(default=None, max_length=300)
+    ref_period: str | None = Field(default=None, max_length=100)
+
+
+class ClaimVerificationRequest(BaseModel):
+    source_id: str = Field(..., min_length=4, max_length=80)
+    page_or_section: str = Field(..., min_length=2, max_length=300)
+    evidence_excerpt: str = Field(..., min_length=10, max_length=5000)
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    ref_period: str | None = Field(default=None, max_length=100)
+
+
 class ManualQAReview(BaseModel):
     """Explicit creator checklist for quality items automation cannot certify."""
 
