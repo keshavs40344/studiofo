@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import uuid
+from datetime import date
 from pathlib import Path
 
 from upsc_studio.core.hardware import find_ffmpeg
