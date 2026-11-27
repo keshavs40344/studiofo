@@ -116,6 +116,16 @@ def test_manual_retry_requires_reviewer_and_inspection_confirmation(tmp_path) ->
         json={"name": "Retry guard", "chapter_title": "Federalism"},
     )
     project_id = created.json()["id"]
+    conn = init_db(tmp_path / "retry-guard.db")
+    store = AgentTaskStore(conn)
+    task_id = store.enqueue(
+        f"chapter-pipeline:{project_id}",
+        TaskSpec("academic", "PIPELINE_ACADEMIC", "pipeline_academic"),
+    )
+    store.transition(task_id, "RUNNING")
+    store.transition(task_id, "FAILED", error="Test failure")
+    conn.close()
+
     response = client.post(
         f"/api/projects/{project_id}/retry",
         json={
@@ -125,3 +135,4 @@ def test_manual_retry_requires_reviewer_and_inspection_confirmation(tmp_path) ->
         },
     )
     assert response.status_code == 409
+    assert "Inspect partial outputs" in response.json()["detail"]
