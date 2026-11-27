@@ -16,6 +16,7 @@ from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import (
     ClaimVerificationRequest,
+    ManualRetryRequest,
     ManualQAReview,
     ProjectCreate,
     ProjectStatus,
@@ -25,7 +26,7 @@ from upsc_studio.db.schemas import (
     VerificationStatus,
     utc_now_iso,
 )
-from upsc_studio.agents.supervisor import ExecutiveProducer
+from upsc_studio.agents.runtime import AgentTaskStore\nfrom upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
 from upsc_studio.research.verifier import EvidenceEngine
@@ -723,6 +724,111 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             "status": VerificationStatus.VERIFIED.value,
             "verification_method": "HUMAN_ATTESTED_SOURCE_EXCERPT",
             "limitation": "The system records the reviewer attestation; it does not independently prove semantic support.",
+        }
+
+    @app.post("/api/projects/{project_id}/retry")
+    def prepare_pipeline_retry(project_id: str, payload: ManualRetryRequest) -> dict:
+        try:
+            mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        store = AgentTaskStore(conn)
+        inner_workflow_id = f"chapter-pipeline:{project_id}"
+        inner_rows = store.list_workflow(inner_workflow_id)
+        stage_order = [
+            "pipeline_ingestion",
+            "pipeline_academic",
+            "pipeline_teaching",
+            "pipeline_visuals",
+            "pipeline_voice",
+            "pipeline_render",
+            "pipeline_qa",
+        ]
+        latest: dict[str, dict] = {}
+        for row in inner_rows:
+            handler = row["handler"]
+            previous = latest.get(handler)
+            current_time = str(row.get("updated_at") or row.get("created_at") or "")
+            previous_time = str(
+                (previous or {}).get("updated_at") or (previous or {}).get("created_at") or ""
+            )
+            if previous is None or current_time >= previous_time:
+                latest[handler] = row
+
+        if not latest:
+            raise HTTPException(status_code=409, detail="No persisted production stages are available to retry.")
+
+        voice_row = latest.get("pipeline_voice")
+        if voice_row and voice_row["status"] == "BLOCKED":
+            try:
+                voice_output = json.loads(voice_row.get("output_json") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                voice_output = {}
+            if voice_output.get("pipeline_status") == ProjectStatus.WAITING_FOR_VOICE.value:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Voice is the missing input, not a failed task. Upload the creator recording in Run Production to continue.",
+                )
+
+        target_handler = next(
+            (
+                handler for handler in stage_order
+                if handler in latest
+                and latest[handler]["status"] in {"FAILED", "BLOCKED", "REVIEW_REQUIRED"}
+            ),
+            None,
+        )
+        if target_handler is None:
+            raise HTTPException(
+                status_code=409,
+                detail="No failed or blocked production stage exists. Review the current stage and QA status before retrying.",
+            )
+
+        try:
+            reset_inner = store.retry_from_handler(
+                inner_workflow_id,
+                target_handler,
+                reviewer=payload.reviewer,
+                reason=payload.reason,
+                partial_outputs_inspected=payload.partial_outputs_inspected,
+                ordered_handlers=stage_order,
+            )
+            outer_row = conn.execute(
+                """
+                SELECT workflow_id FROM agent_tasks
+                WHERE workflow_id LIKE ? AND handler = 'chapter_pipeline'
+                ORDER BY updated_at DESC, created_at DESC
+                LIMIT 1
+                """,
+                (f"production:{project_id}:%",),
+            ).fetchone()
+            reset_outer: list[str] = []
+            if outer_row:
+                reset_outer = store.retry_from_handler(
+                    outer_row["workflow_id"],
+                    "chapter_pipeline",
+                    reviewer=payload.reviewer,
+                    reason=payload.reason,
+                    partial_outputs_inspected=payload.partial_outputs_inspected,
+                    ordered_handlers=[
+                        "preflight",
+                        "chapter_pipeline",
+                        "editorial_packaging",
+                        "gated_private_publish",
+                    ],
+                    allow_completed_start=True,
+                )
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        return {
+            "status": "RETRY_PREPARED",
+            "start_stage": target_handler,
+            "reset_inner_tasks": reset_inner,
+            "reset_outer_tasks": reset_outer,
+            "reviewer": payload.reviewer,
+            "next_action": "Run production again. The saved project input bundle will be reused when no new notes are uploaded.",
         }
 
     @app.post("/api/projects/{project_id}/review")
