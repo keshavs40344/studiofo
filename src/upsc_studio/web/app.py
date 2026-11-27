@@ -154,6 +154,15 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
         <h3>Production Stage Status</h3>
         <div id="pipeline-stages"><p>No production run recorded.</p></div>
+        <div class="card" style="background:#0f172a;">
+          <h3>Controlled Stage Retry</h3>
+          <p>Use only after inspecting partial files. A failed stage and its downstream stages will be reset; completed upstream stages stay intact.</p>
+          <label>Reviewer</label><input id="retry-reviewer" placeholder="Reviewer name" />
+          <label>Retry reason</label><textarea id="retry-reason" rows="2" placeholder="Describe the failure and fix..."></textarea>
+          <label><input type="checkbox" id="retry-inspected" /> I inspected partial output files and understand they may be overwritten.</label>
+          <button class="secondary" onclick="prepareRetry()">Prepare Failed-Stage Retry</button>
+          <p>After preparation, click Run Production again. Saved notes and voice recordings are reused when no new files are supplied.</p>
+        </div>
         <h3>Pipeline Output & Diagnostics</h3>
         <pre id="w-output">Select or run a project to inspect deliverables.</pre>
       </div>
@@ -342,6 +351,26 @@ async function verifyClaim() {
   if (!res.ok) { alert('Claim verification not recorded: ' + (data.detail || 'Review failed')); return; }
   alert('Human verification attestation saved. The system did not independently compare semantic support.');
   await loadResearch();
+}
+
+async function prepareRetry() {
+  if (!currentProjectId) return;
+  const payload = {
+    reviewer: document.getElementById('retry-reviewer').value,
+    reason: document.getElementById('retry-reason').value,
+    partial_outputs_inspected: document.getElementById('retry-inspected').checked
+  };
+  const res = await fetch(`/api/projects/${currentProjectId}/retry`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert('Retry not prepared: ' + (data.detail || 'Review the stage status.'));
+    return;
+  }
+  alert(`Retry prepared from ${data.start_stage}. Click Run Production to execute the reset stages.`);
+  await openProject(currentProjectId);
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
 }
 
 async function runPipeline() {
