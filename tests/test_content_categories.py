@@ -10,6 +10,7 @@ from upsc_studio.pipeline.staged import StagedChapterPipeline
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.auditor import QAAuditor
 from upsc_studio.teaching.engine import TeachingEngine
+from upsc_studio.research.verifier import EvidenceEngine
 
 
 def test_legacy_database_migrates_to_upsc_category_by_default(tmp_path: Path) -> None:
@@ -167,3 +168,26 @@ def test_non_upsc_academic_qa_does_not_demand_upsc_coverage_rows(tmp_path: Path)
     qa = QAAuditor(conn, Path(project.root_dir))._check_academic(project.id)
     assert not any("UPSC syllabus coverage" in issue for issue in qa["blocking_issues"])
     assert any("Category topic map is missing" in issue for issue in qa["blocking_issues"])
+
+def test_current_affairs_rejects_sources_after_the_project_cutoff(tmp_path: Path) -> None:
+    conn = init_db(tmp_path / "cutoff.db")
+    project = ProjectManager(conn, tmp_path / "projects").create_project(
+        ProjectCreate(
+            name="Current affairs cutoff",
+            chapter_title="Recent climate policy",
+            content_category="current_affairs",
+            cutoff_date="2026-11-27",
+        )
+    )
+    EvidenceEngine(conn, Path(project.root_dir)).add_source(
+        project.id,
+        "Future-dated report",
+        "Official publisher",
+        "PRIMARY_OFFICIAL",
+        url="https://example.gov/future-report",
+        pub_date="2026-11-28",
+    )
+    qa = QAAuditor(conn, Path(project.root_dir))._check_academic(project.id)
+    assert any(
+        "on or before the project cutoff" in issue for issue in qa["blocking_issues"]
+    )
