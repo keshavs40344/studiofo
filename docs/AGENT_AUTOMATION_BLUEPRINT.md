@@ -11,6 +11,8 @@ The repository already contains:
 
 Important limitation: registry entries are mappings to existing modules, not proof of 24 independent autonomous workers. Several entries reuse the same module, and the current supervisor primarily invokes the chapter pipeline plus editorial packaging and a YouTube upload check. Do not advertise all 24 as independently implemented agents until each has its own validated contract, execution path, tests and observable outputs.
 
+Evidence-integrity hardening is documented separately in `docs/AGENT_EVIDENCE_INTEGRITY.md`. Source candidates are not treated as verified facts; claim verification requires a reviewer-declared excerpt and pinpoint reference. The local API currently records a reviewer label but does not authenticate the reviewer's identity. The production pipeline pauses in `WAITING_FOR_RESEARCH_REVIEW` until claims are attested, and teaching generation fails closed when no attested factual claims exist.
+
 ## Recommended agent topology
 
 Use a supervisor + specialist workers + independent validators.
