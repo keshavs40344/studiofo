@@ -111,18 +111,18 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         target_duration_min=8,
         tts_enabled=True,
     )
-    assert pkg["sections_count"] == 7  # Expanded 7 sections for 8-min target
+    assert pkg["sections_count"] == 5  # Fixed evidence-safe lesson structure; no invented duration filler
 
     # 4. Duration Schedule
     planner = DurationPlanner(teaching_engine.WORDS_PER_MINUTE)
     sched = planner.build_schedule(proj_dir, pkg["sections"], target_duration_min=8)
     assert sched["target_duration_min"] == 8
-    assert len(sched["sections"]) == 7
+    assert len(sched["sections"]) == 5
 
     # 5. Visual Storyboard and Diverse Graphics
     director = StoryboardDirector(proj_dir)
     scenes = director.build_storyboard(proj.chapter_title, pkg["sections"])
-    assert len(scenes) == 7
+    assert len(scenes) == 5
 
     rights = AssetRightsLedger(conn, proj_dir)
     anim_engine = AnimationEngine(proj_dir, rights)
