@@ -14,7 +14,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 
 from upsc_studio.core.hardware import detect_hardware
-from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
+from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR, sha256_file
 from upsc_studio.db.database import init_db
 from upsc_studio.db.schemas import (
     ClaimVerificationRequest,
@@ -1282,6 +1282,39 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                 detail="Publication QA is not ready: " + (", ".join(blockers) or "review requirements remain pending"),
             )
 
+        receipt_path = project_dir / "publishing" / "youtube_upload_receipt.json"
+        lock_path = project_dir / "publishing" / "youtube_upload_in_progress.json"
+        video_sha256 = sha256_file(final_video)
+        if receipt_path.is_file():
+            try:
+                previous_receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                previous_receipt = {}
+            previous_upload = previous_receipt.get("upload_result", {})
+            if (
+                previous_upload.get("status") == "UPLOADED"
+                and previous_receipt.get("video_sha256") == video_sha256
+            ):
+                return {
+                    **previous_receipt,
+                    "status": "ALREADY_UPLOADED",
+                    "message": "This exact approved video has already been uploaded. No second upload was attempted.",
+                }
+        try:
+            descriptor = lock_path.open("x", encoding="utf-8")
+            descriptor.write_text(json.dumps({
+                "project_id": project_id,
+                "requested_by": payload.approver,
+                "requested_at": utc_now_iso(),
+                "video_sha256": video_sha256,
+            }), encoding="utf-8")
+            descriptor.close()
+        except FileExistsError as exc:
+            raise HTTPException(
+                status_code=409,
+                detail="An upload attempt is already in progress or needs reconciliation.",
+            ) from exc
+
         publisher = YouTubePublisher()
         metadata = {
             "video_title": proj.chapter_title[:100],
@@ -1305,12 +1338,13 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             "requested_privacy": payload.privacy_status,
             "confirmed_this_run": payload.confirm_publish,
             "requested_at": utc_now_iso(),
+            "video_sha256": video_sha256,
             "qa_status": report.get("ready_for_publication"),
             "upload_result": result,
         }
-        receipt_path = project_dir / "publishing" / "youtube_upload_receipt.json"
         receipt_path.parent.mkdir(parents=True, exist_ok=True)
         receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False), encoding="utf-8")
+        lock_path.unlink(missing_ok=True)
         return receipt
 
     @app.post("/api/projects/{project_id}/approve")
