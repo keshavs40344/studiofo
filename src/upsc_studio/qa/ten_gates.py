@@ -67,19 +67,59 @@ class TenGateAuditor:
             final_mp4 and final_mp4.exists() and comp.get("black_frame_segments_detected") == 0
         )
 
+        review_path = self.qa_dir / "manual_review.json"
+        manual_review: dict[str, Any] = {}
+        if review_path.is_file():
+            try:
+                manual_review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                manual_review = {}
+        manual_checks = manual_review.get("checks", {})
+        reviewer = str(manual_review.get("reviewer", "")).strip()
+        has_human_reviewer = len(reviewer) >= 2
+        reviewed = lambda key: has_human_reviewer and manual_checks.get(key) is True
+
+        script_path = self.project_dir / "teaching" / "script_hinglish.md"
+        outline_path = self.project_dir / "teaching" / "teaching_outline.md"
+        teaching_files_present = all(
+            path.is_file() and path.stat().st_size > 0
+            for path in (script_path, outline_path)
+        )
+        visual_assets_present = bool(scenes) and all(
+            scene.primary_asset and Path(scene.primary_asset).is_file()
+            for scene in scenes
+        )
+
         gates: dict[str, str] = {
             "A_SYLLABUS_COMPLETENESS": (
                 "FAILED" if cov_count == 0 else ("PENDING" if unresolved_coverage else "PASSED")
             ),
             "B_RESEARCH_SOURCE": "PASSED" if external_sources > 0 else "FAILED",
             "C_FACTUAL_ACCURACY": base_qa["academic"]["status"],
-            "D_SCRIPT_COMPLETENESS": "PASSED" if (self.project_dir / "teaching" / "script_hinglish.md").exists() else "FAILED",
-            "E_TEACHING_CLARITY": "PASSED" if (self.project_dir / "teaching" / "teaching_outline.md").exists() else "FAILED",
-            "F_VISUAL_RELEVANCE": "PASSED" if (scenes and all(s.primary_asset and Path(s.primary_asset).exists() for s in scenes)) else "FAILED",
-            "G_VOICE_SUBTITLE_ALIGNMENT": "PASSED" if has_subtitles else "PENDING",
+            "D_SCRIPT_COMPLETENESS": (
+                "PASSED" if script_path.is_file() and script_path.stat().st_size > 0 else "FAILED"
+            ),
+            "E_TEACHING_CLARITY": (
+                "FAILED" if not teaching_files_present
+                else ("PASSED" if reviewed("teaching_clarity") else "PENDING")
+            ),
+            "F_VISUAL_RELEVANCE": (
+                "FAILED" if not visual_assets_present
+                else ("PASSED" if reviewed("visual_relevance") else "PENDING")
+            ),
+            "G_VOICE_SUBTITLE_ALIGNMENT": (
+                "FAILED" if not has_subtitles
+                else ("PASSED" if reviewed("voice_subtitle_alignment") else "PENDING")
+            ),
             "H_COPYRIGHT_LICENCE": base_qa["rights"]["status"],
             "I_AUDIO_VIDEO_TECHNICAL": base_qa["media"]["status"],
-            "J_FINAL_PLAYBACK_INSPECTION": "PASSED" if final_video_valid else ("FAILED" if final_mp4 and comp.get("black_frame_segments_detected", -1) > 0 else "PENDING"),
+            "J_FINAL_PLAYBACK_INSPECTION": (
+                "FAILED" if final_mp4 and comp.get("black_frame_segments_detected", -1) > 0
+                else (
+                    "PASSED" if final_video_valid and reviewed("final_playback_inspection")
+                    else "PENDING"
+                )
+            ),
         }
 
         failed = [k for k, v in gates.items() if v == "FAILED"]
@@ -105,6 +145,16 @@ class TenGateAuditor:
                 "B_RESEARCH_SOURCE": {
                     "source_rows": source_count,
                     "external_sources_with_url": external_sources,
+                },
+                "MANUAL_REVIEW": {
+                    "reviewer": reviewer or None,
+                    "reviewed_at": manual_review.get("reviewed_at"),
+                    "checks": {
+                        "teaching_clarity": reviewed("teaching_clarity"),
+                        "visual_relevance": reviewed("visual_relevance"),
+                        "voice_subtitle_alignment": reviewed("voice_subtitle_alignment"),
+                        "final_playback_inspection": reviewed("final_playback_inspection"),
+                    },
                 },
             },
             "passed_gates": passed,
