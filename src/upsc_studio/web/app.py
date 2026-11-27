@@ -50,7 +50,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   <div class="grid">
     <div>
       <div class="card">
-        <h3>New UPSC Chapter Project</h3>
+        <h3>New Content Project</h3>
         <label>Project Name</label>
         <input id="p-name" placeholder="e.g. Anti-Defection Law GS2" />
         <label>Chapter / Topic Title</label>
@@ -131,7 +131,7 @@ async function loadProjects() {
   el.innerHTML = list.map(p =>
     `<div class="proj-item" onclick="openProject('${p.id}')">
        <strong>${p.name}</strong><br/>
-       <small>${p.chapter_title} — <span class="badge ${p.status}">${p.status}</span></small>
+       <small>${p.content_category} · ${p.chapter_title} — <span class="badge ${p.status}">${p.status}</span></small>
      </div>`
   ).join('');
 }
