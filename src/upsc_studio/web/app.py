@@ -21,6 +21,7 @@ from upsc_studio.db.schemas import (
     ProjectCreate,
     ProjectStatus,
     ResearchClaimCreate,
+    ResearchDiscoveryRequest,
     ResearchSourceCreate,
     SceneSpec,
     VerificationStatus,
@@ -31,6 +32,7 @@ from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
 from upsc_studio.research.verifier import EvidenceEngine
+from upsc_studio.research.discovery import ResearchDiscovery
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -642,6 +644,25 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             allow_youtube_upload=False,
             human_publish_approval=False,
         )
+
+    @app.post("/api/projects/{project_id}/research/discover")
+    def discover_project_research(
+        project_id: str, payload: ResearchDiscoveryRequest
+    ) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        result = ResearchDiscovery(
+            EvidenceEngine(conn, Path(proj.root_dir))
+        ).discover(
+            project_id=project_id,
+            query=payload.query,
+            limit=payload.limit,
+            cutoff_date=proj.cutoff_date if proj.content_category == "current_affairs" else None,
+            require_dated_sources=proj.content_category == "current_affairs",
+        )
+        return result
 
     @app.get("/api/projects/{project_id}/research")
     def get_research_ledger(project_id: str) -> dict:
