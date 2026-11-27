@@ -13,10 +13,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
-from upsc_studio.db.schemas import ProjectCreate
+from upsc_studio.db.schemas import ProjectCreate, SceneSpec
 from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
-from upsc_studio.qa.auditor import QAAuditor
+from upsc_studio.qa.ten_gates import TenGateAuditor
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -272,12 +272,29 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
     @app.post("/api/projects/{project_id}/approve")
     def approve_project(project_id: str, approver: str = "User") -> dict:
         proj = mgr.get_project(project_id)
-        auditor = QAAuditor(conn, Path(proj.root_dir))
-        report = auditor.run_all_checks(project_id, human_approved_by=approver)
-        if report["publication"]["status"] != "PASSED":
+        project_dir = Path(proj.root_dir)
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        if not storyboard_path.is_file():
+            raise HTTPException(status_code=400, detail="Storyboard is not available for final review.")
+        try:
+            raw_scenes = json.loads(storyboard_path.read_text(encoding="utf-8"))
+            scenes = [SceneSpec.model_validate(item) for item in raw_scenes]
+        except (OSError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail=f"Storyboard cannot be reviewed: {exc}") from exc
+        final_video = project_dir / "render" / "final" / "final_video.mp4"
+        report = TenGateAuditor(conn, project_dir).run_ten_gates(
+            project_id, scenes, final_video if final_video.is_file() else None,
+            human_approved_by=approver,
+        )
+        if report["ready_for_publication"] != "PASSED":
+            blockers = [
+                f"{name}={status}"
+                for name, status in report.get("gates", {}).items()
+                if status != "PASSED"
+            ]
             raise HTTPException(
                 status_code=400,
-                detail="; ".join(report["publication"]["blocking_issues"]),
+                detail="Final approval blocked: " + (", ".join(blockers) or "QA requirements are not satisfied."),
             )
         return report
 
