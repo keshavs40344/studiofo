@@ -15,7 +15,7 @@ from upsc_studio.agents.runtime import AgentTaskStore, DependencyScheduler, Task
 from upsc_studio.agents.workers import default_worker_handlers
 from upsc_studio.core.paths import sha256_file
 from upsc_studio.db.schemas import SceneSpec
-from upsc_studio.pipeline.orchestrator import ChapterPipeline
+from upsc_studio.pipeline.staged import StagedChapterPipeline
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.publishing.editorial_optimizer import EditorialOptimizer
 from upsc_studio.publishing.youtube_publisher import YouTubePublisher
@@ -174,8 +174,10 @@ class ExecutiveProducer:
             }
 
         def production_handler(payload: dict[str, Any]) -> dict[str, Any]:
-            pipeline = ChapterPipeline(self.conn, self.projects_root)
-            result = pipeline.run_pipeline(
+            # The nested stage DAG persists each real production phase independently.
+            # A missing voice is a resumable pause, not a false successful video render.
+            pipeline = StagedChapterPipeline(self.conn, self.projects_root)
+            result = pipeline.run_staged(
                 project_id=project_id,
                 notes_files=resolved_notes,
                 typed_notes=typed_notes,
@@ -183,9 +185,8 @@ class ExecutiveProducer:
                 ai_narration=ai_narration,
             )
             context["pipe_out"] = result
-            # Store the structured report and artifact paths, not the audio/video bytes.
             return {
-                "status": "COMPLETED",
+                "status": "FAILED" if result.get("status") == "FAILED" else "COMPLETED",
                 "project_id": project_id,
                 "pipeline_status": result.get("status", "UNKNOWN"),
                 "chapter_map": result.get("chapter_map", {}),
@@ -197,6 +198,12 @@ class ExecutiveProducer:
                 "recording_script": result.get("recording_script"),
                 "scenes_count": result.get("scenes_count", 0),
                 "evidence_summary": result.get("evidence_summary", {}),
+                "duration_schedule": result.get("duration_schedule"),
+                "matched_pyqs": result.get("matched_pyqs", 0),
+                "specialist_profile": result.get("specialist_profile"),
+                "voice_wait_reason": result.get("voice_wait_reason"),
+                "voice_capabilities": result.get("voice_capabilities"),
+                "pipeline_stages": result.get("pipeline_stages", {}),
             }
 
         def editorial_handler(payload: dict[str, Any]) -> dict[str, Any]:
