@@ -41,6 +41,11 @@ i18n = [
     "argostranslate>=1.9.6",
 ]
 
+youtube = [
+    "google-api-python-client>=2.120.0",
+    "google-auth-oauthlib>=1.2.0",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
