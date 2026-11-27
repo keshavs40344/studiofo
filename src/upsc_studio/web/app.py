@@ -38,7 +38,8 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     .PENDING, .WAITING_FOR_VOICE { background: #92400e; color: #fef3c7; }
     pre { background: #0f172a; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; max-height: 320px; }
     .proj-item { padding: 8px; border-bottom: 1px solid #334155; cursor: pointer; }
-    .proj-item:hover { background: #0f172a; }\n    input[type=checkbox] { width: auto; margin-right: 8px; }
+    .proj-item:hover { background: #0f172a; }
+    input[type=checkbox] { width: auto; margin-right: 8px; }
   </style>
 </head>
 <body>
