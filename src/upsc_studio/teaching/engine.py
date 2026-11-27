@@ -8,6 +8,9 @@ from pathlib import Path
 from typing import Any
 
 from upsc_studio.db.schemas import VerificationStatus
+from upsc_studio.teaching.concept_explainer import ConceptExplainerEngine
+from upsc_studio.teaching.study_pack import StudyPackBuilder
+from upsc_studio.teaching.topic_map import ContentPillar, TopicMapBuilder
 
 
 class TeachingEngine:
@@ -55,6 +58,20 @@ class TeachingEngine:
             raise ValueError(f"Unsupported content category: {content_category}")
         papers_or_category = chapter_map.get("primary_papers") or [category_labels[content_category]]
         primary_papers = ", ".join(papers_or_category)
+
+        cutoff_date = chapter_map.get("research_cutoff_date")
+        topic_map = TopicMapBuilder().build_topic_map(
+            topic_title=chapter_title,
+            content_category=content_category,
+            verified_claims=verified_claims,
+            cutoff_date=cutoff_date,
+        )
+        mapping_report = ConceptExplainerEngine().map_and_validate_concepts(
+            topic_map=topic_map,
+            verified_claims=verified_claims,
+            notes_text=notes_excerpt,
+        )
+
         sections = self._build_sections(
             chapter_title=chapter_title,
             primary_papers=primary_papers,
@@ -282,6 +299,15 @@ class TeachingEngine:
             json.dumps(sections, indent=2, ensure_ascii=False), encoding="utf-8"
         )
 
+        # Generate connected learning deliverables pack
+        pack_builder = StudyPackBuilder(self.teaching_dir)
+        study_pack_paths = pack_builder.build_full_study_pack(
+            topic_map=topic_map,
+            mapping_report=mapping_report,
+            verified_claims=verified_claims,
+            sections=sections,
+        )
+
         return {
             "content_category": content_category,
             "sections_count": len(sections),
@@ -294,6 +320,9 @@ class TeachingEngine:
                 else "INSUFFICIENT_EVIDENCE"
             ),
             "sections": sections,
+            "topic_map": topic_map.to_dict(),
+            "explanation_mapping": mapping_report.to_dict(),
+            "study_pack": study_pack_paths,
         }
 
     def _build_sections(

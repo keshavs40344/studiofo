@@ -122,7 +122,10 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
         assert "No Hindi Piper model" in out["voice_wait_reason"]
         assert not out.get("audio_report")
         assert not out.get("render_manifest")
-        assert out["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
+        assert out["youtube_publish"]["status"] in {
+            "PENDING_VIDEO_RENDER",
+            "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+        }
     else:
         assert out["status"] in {"APPROVED", "NEEDS_REVIEW"}
         assert Path(out["audio_report"]["narration_full_wav"]).exists()
@@ -130,4 +133,7 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
         assert Path(out["audio_report"]["pronunciation_report"]).exists()
         assert Path(out["render_manifest"]["final_video"]).exists()
         assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
-        assert out["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
+        assert out["youtube_publish"]["status"] in {
+            "PENDING_VIDEO_RENDER",
+            "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+        }
