@@ -44,13 +44,20 @@ def test_multi_pass_research_claim_categorization_and_filtering(tmp_path: Path) 
     )
 
     # 1. Fact with valid pinpoint reference -> Safe for narration
-    ev_engine.add_claim(
+    supported_claim_id = ev_engine.add_claim(
         project_id=proj.id,
         statement="Article 32 confers right to approach the Supreme Court for enforcement of Fundamental Rights.",
         chapter_section="Remedies",
         source_id=s1_id,
         page_or_section="Article 32, Clause 1",
         ref_period="2024",
+    )
+    ev_engine.verify_claim_against_source(
+        claim_id=supported_claim_id,
+        source_id=s1_id,
+        page_or_section="Article 32, Clause 1",
+        evidence_excerpt="The right to move the Supreme Court by appropriate proceedings for enforcement of Part III rights.",
+        reviewer_id="test-reviewer",
     )
 
     # 2. Unsupported claim (missing source and page) -> Must be marked INSUFFICIENT_EVIDENCE
@@ -85,6 +92,7 @@ def test_multi_pass_research_claim_categorization_and_filtering(tmp_path: Path) 
 
     assert report.total_claims_extracted == 4
     assert report.verified_facts_count == 1
+    assert report.safe_narration_claims[0].claim_id == supported_claim_id
     assert report.interpretations_count >= 1
     assert report.insufficient_evidence_count >= 1
     assert report.outdated_claims_count >= 1
