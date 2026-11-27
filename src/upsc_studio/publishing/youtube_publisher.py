@@ -50,19 +50,20 @@ class YouTubePublisher:
         default_language: str = "en",
     ) -> dict[str, Any]:
         """Upload only after explicit per-run approval, QA pass, and OAuth connection."""
+        if not qa_passed:
+            return {
+                "status": "BLOCKED_QA_FAILED",
+                "video_id": None,
+                "privacy_status": privacy_status,
+                "upload_attempted": False,
+                "error": "Cannot upload video: QA checks (Academic, Rights, Media) have not all passed.",
+            }
         if not user_approved and not human_approved_by:
             return {
                 "status": "BLOCKED_AWAITING_EXPLICIT_USER_APPROVAL",
                 "video_id": None,
                 "privacy_status": privacy_status,
                 "upload_attempted": False,
-            }
-        if not qa_passed:
-            return {
-                "status": "BLOCKED_QA_FAILED",
-                "video_id": None,
-                "privacy_status": privacy_status,
-                "error": "Cannot upload video: QA checks (Academic, Rights, Media) have not all passed.",
             }
 
         if privacy_status not in {"private", "unlisted", "public"}:
