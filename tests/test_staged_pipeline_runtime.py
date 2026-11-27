@@ -121,3 +121,15 @@ def test_staged_pipeline_reuses_upstream_artifacts_when_voice_arrives(
     assert calls == {"ingestion": 1, "academic": 1, "teaching": 1,
                      "visuals": 1, "voice": 2, "render": 1, "qa": 1}
     assert third["pipeline_stages"]["status"] == "COMPLETED"
+
+    # A new manual-review decision reruns QA without rebuilding production artifacts.
+    review_path = Path(project.root_dir) / "qa" / "manual_review.json"
+    review_path.write_text(json.dumps({"reviewer": "Creator", "checks": {"teaching_clarity": True}}),
+                           encoding="utf-8")
+    fourth = pipeline.run_staged(
+        project.id, typed_notes="Federalism distributes constitutional powers.",
+        voice_path=recording,
+    )
+    assert fourth["status"] == ProjectStatus.APPROVED.value
+    assert calls == {"ingestion": 1, "academic": 1, "teaching": 1,
+                     "visuals": 1, "voice": 2, "render": 1, "qa": 2}
