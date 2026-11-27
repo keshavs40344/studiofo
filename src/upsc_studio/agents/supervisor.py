@@ -155,7 +155,7 @@ class ExecutiveProducer:
                     astate.errors = [blocked_reason]
             with event_log.open("a", encoding="utf-8") as f:
                 for astate in agent_states.values():
-                    f.write(astate.model_dump_json() + "\\n")
+                    f.write(astate.model_dump_json() + "\n")
             return {
                 **pipe_out,
                 "agents_registered": len(AGENT_REGISTRY),
