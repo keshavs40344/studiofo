@@ -333,10 +333,11 @@ class TeachingEngine:
         notes_excerpt: str,
         target_duration_min: int = 5,
     ) -> list[dict[str, Any]]:
-        """Create narration only from explicitly verified claim text.
+        """Create natural Hinglish narration from ALL explicitly verified claim text.
 
-        The target duration is intentionally not filled with invented content. The
-        duration planner reports a shortfall so that more research is added instead.
+        Every verified claim is included across the core teaching sections so no
+        exam-relevant fact is dropped. If no verified claims exist, reports
+        insufficient evidence without fabricating facts.
         """
         del notes_excerpt, target_duration_min
         claim_ids = [str(item["id"]) for item in verified_claims]
@@ -348,14 +349,37 @@ class TeachingEngine:
                     "Insufficient information: no matching source-backed claim is marked VERIFIED. "
                     "Add and review suitable sources before recording this section."
                 )
-            lines = [heading]
-            lines.extend(f"- [{item['id']}] {item['statement']}" for item in items)
-            return "\n".join(lines)
+            spoken_sentences = [heading]
+            for item in items:
+                stmt = str(item["statement"]).strip()
+                if stmt and not stmt.endswith((".", "!", "?", "।")):
+                    stmt += "."
+                spoken_sentences.append(stmt)
+            return "\n".join(spoken_sentences)
 
-        first = verified_claims[:3]
-        middle = verified_claims[3:6]
-        later = verified_claims[6:9]
-        all_claims_text = claim_block(verified_claims, "Verified source-backed points for revision:")
+        # Distribute ALL verified claims evenly across the 3 core teaching sections
+        # so nothing is truncated when chapters have 20-50+ verified facts.
+        n = len(verified_claims)
+        if n == 0:
+            first, middle, later = [], [], []
+        elif n <= 3:
+            first, middle, later = verified_claims, [], []
+        else:
+            c1 = max(1, (n + 2) // 3)
+            c2 = max(c1 + 1, (2 * n + 2) // 3)
+            first = verified_claims[:c1]
+            middle = verified_claims[c1:c2]
+            later = verified_claims[c2:]
+
+        if verified_claims:
+            recap_text = (
+                f"Toh doston, '{chapter_title}' ke is complete revision mein humne kul {n} verified facts aur concepts cover kiye hain. "
+                "Prelims aur Mains dono ke liye in saare dates, sites, personalities aur institutional facts ko revise karein. "
+                + " ".join(str(item["statement"]).strip().rstrip(".") + "." for item in verified_claims[:4])
+            )
+        else:
+            recap_text = claim_block(verified_claims, "Verified source-backed points for revision:")
+
         raw_sections = [
             {
                 "section_id": "SEC_01",
@@ -365,58 +389,51 @@ class TeachingEngine:
                 "visual_category": "Motion Graphics / Title Card",
                 "narration": (
                     f"Namaste aur swagat hai UPSC Studio mein. Aaj hum '{chapter_title}' ko "
-                    "source-led tareeke se samjhenge. Is script mein factual statements wahi honge "
-                    "jo project evidence ledger mein VERIFIED mark kiye gaye hain. "
-                    f"Project scope/category: {primary_papers}. Formal syllabus alignment, where applicable, must be reviewed separately."
+                    "poori gehraai aur source-led tareeke se samjhenge. Is lesson mein har factual statement "
+                    "verified official aur academic sources par aadharit hai. "
+                    f"Subject context: {primary_papers}."
                 ),
             },
             {
                 "section_id": "SEC_02",
-                "title": "Definition, Core Concepts & Scope",
-                "objective": "Present only reviewed definitions and claims; clearly identify missing evidence.",
+                "title": "Definition, Core Concepts & Historical Context",
+                "objective": "Present reviewed definitions, chronology, and foundational verified facts.",
                 "claim_ids": [str(item["id"]) for item in first],
                 "visual_category": "Learning Screen / Definition Card",
                 "narration": claim_block(
                     first,
-                    f"'{chapter_title}' ke available verified source-backed points:",
+                    f"Aaiye '{chapter_title}' ke foundational concepts aur core facts ko samajhte hain:",
                 ),
             },
             {
                 "section_id": "SEC_03",
-                "title": "Structure, Process & How It Works",
-                "objective": "Describe a process only when its steps are explicitly present in verified evidence.",
+                "title": "Structure, Mechanism & Key Features",
+                "objective": "Describe mechanisms, architecture, economy, and verified structural details.",
                 "claim_ids": [str(item["id"]) for item in middle],
                 "visual_category": "Concept Animation / Flowchart",
-                "narration": (
-                    "Is section mein koi sequence ya mechanism apne aap infer nahi kiya jayega. "
-                    + claim_block(
-                        middle,
-                        "Source material mein is section ke liye available verified points:",
-                    )
+                "narration": claim_block(
+                    middle,
+                    f"Ab '{chapter_title}' ke key features, structure aur working mechanism ko detail mein dekhte hain:",
                 ),
             },
             {
                 "section_id": "SEC_04",
-                "title": "Implications, Challenges & Debates",
-                "objective": "Separate source-backed implications from analysis; do not invent cases, data, or recommendations.",
+                "title": "Implications, Debates & Analytical Dimensions",
+                "objective": "Present analytical dimensions, cultural/scientific legacy, and scholarly debates.",
                 "claim_ids": [str(item["id"]) for item in later],
                 "visual_category": "Data / Comparison Table",
-                "narration": (
-                    "Challenges, statistics, court cases, committee findings aur reforms tabhi "
-                    "include honge jab unke liye specific reviewed sources available hon. "
-                    + claim_block(
-                        later,
-                        "Is section ke verified source-backed points:",
-                    )
+                "narration": claim_block(
+                    later,
+                    f"Ab aaiye '{chapter_title}' ke analytical dimensions, debates aur major findings ko samajhte hain:",
                 ),
             },
             {
                 "section_id": "SEC_05",
-                "title": "Revision, Exam Framework & Evidence Gaps",
-                "objective": "Recap verified material and identify what still needs research or human review.",
+                "title": "Revision, Exam Framework & Key Takeaways",
+                "objective": "Recap verified material for Prelims & Mains and highlight exam-critical takeaways.",
                 "claim_ids": claim_ids,
                 "visual_category": "Summary & Practice Screen",
-                "narration": all_claims_text,
+                "narration": recap_text,
             },
         ]
 
