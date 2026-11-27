@@ -184,6 +184,7 @@ class AgentTaskStore:
         reason: str,
         partial_outputs_inspected: bool,
         ordered_handlers: Iterable[str],
+        allow_completed_start: bool = False,
     ) -> list[str]:
         """Explicitly reset a failed stage and downstream blocked tasks, preserving event history.
 
@@ -201,9 +202,12 @@ class AgentTaskStore:
         target = next((row for row in rows if row["handler"] == start_handler), None)
         if target is None:
             raise ValueError(f"No persisted task exists for handler: {start_handler}")
-        if target["status"] not in {"FAILED", "BLOCKED", "REVIEW_REQUIRED"}:
+        allowed_start = {"FAILED", "BLOCKED", "REVIEW_REQUIRED"}
+        if allow_completed_start:
+            allowed_start.add("COMPLETED")
+        if target["status"] not in allowed_start:
             raise ValueError(
-                f"Task {start_handler} is {target['status']}; only failed or blocked stages can be retried."
+                f"Task {start_handler} is {target['status']}; it is not eligible for a reviewed retry."
             )
         handler_positions = {handler: index for index, handler in enumerate(order)}
         reset: list[str] = []
@@ -215,7 +219,11 @@ class AgentTaskStore:
             status = row["status"]
             if status == "RUNNING":
                 raise ValueError("A downstream task is still running; wait for it to finish before retrying.")
-            if status in {"FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"}:
+            should_reset = (
+                status in {"FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"}
+                or (allow_completed_start and status == "COMPLETED")
+            )
+            if should_reset:
                 self.conn.execute(
                     """
                     UPDATE agent_tasks
