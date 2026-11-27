@@ -114,3 +114,14 @@ class SceneSpec(BaseModel):
     source_citations: list[str] = Field(default_factory=list)
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+class ManualQAReview(BaseModel):
+    """Explicit creator checklist for quality items automation cannot certify."""
+
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    teaching_clarity: bool = False
+    visual_relevance: bool = False
+    voice_subtitle_alignment: bool = False
+    final_playback_inspection: bool = False
+    notes: str = Field(default="", max_length=2000)
+
