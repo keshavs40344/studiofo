@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from upsc_studio.db.schemas import SceneSpec
+from upsc_studio.video.shorts import ShortsRenderer
 
 
 class EditorialOptimizer:
@@ -17,41 +18,38 @@ class EditorialOptimizer:
         chapter_title: str,
         primary_papers: list[str],
         scenes: list[SceneSpec],
+        content_category: str = "upsc",
     ) -> dict:
+        category_label = {
+            "upsc": "UPSC GS Analysis",
+            "general_knowledge": "General Knowledge",
+            "current_affairs": "Current Affairs",
+            "deep_dive": "Deep Dive",
+        }.get(content_category, "Educational Documentary")
         title_candidates = [
             {
-                "title": f"{chapter_title} | Complete UPSC GS Analysis ({', '.join(primary_papers[:2])})",
-                "scores": {"accuracy": 10, "readability": 9, "relevance": 10, "curiosity": 8, "clickbait_risk": 0},
+                "title": f"{chapter_title} | {category_label}",
+                "scores": {"accuracy": None, "readability": None, "relevance": None,
+                           "curiosity": None, "clickbait_risk": "REQUIRES_HUMAN_REVIEW"},
             },
             {
-                "title": f"How {chapter_title} Works: Constitutional Mechanism, Cases & Prelims/Mains",
-                "scores": {"accuracy": 10, "readability": 9, "relevance": 10, "curiosity": 9, "clickbait_risk": 0},
+                "title": f"Understanding {chapter_title}: Key Evidence and Implications",
+                "scores": {"accuracy": None, "readability": None, "relevance": None,
+                           "curiosity": None, "clickbait_risk": "REQUIRES_HUMAN_REVIEW"},
             },
         ]
 
-        shorts_candidates: list[dict] = []
-        for s in scenes:
-            if s.scene_id in {"SCN_02", "SCN_03"}:
-                shorts_candidates.append(
-                    {
-                        "short_id": f"SHORT_{s.scene_id}",
-                        "source_scene_id": s.scene_id,
-                        "title": f"{chapter_title}: {s.section_title}",
-                        "duration_sec": min(58.0, s.estimated_duration_sec),
-                        "context_note": s.learning_objective,
-                        "sources": s.source_citations,
-                        "independently_understandable": True,
-                    }
-                )
+        shorts_candidates = ShortsRenderer.build_candidates(scenes, chapter_title)
 
         report = {
             "chapter_title": chapter_title,
+            "content_category": content_category,
             "retention_structure": [
                 "0-20s: Truthful conceptual hook & UPSC stakes",
                 "Context -> Mechanism -> Case Studies -> Reforms -> Recap",
             ],
             "title_candidates": title_candidates,
-            "seo_hashtags": ["#UPSC", "#UPSCPreparation", "#GeneralStudies", "#IndianPolity"],
+            "seo_hashtags": ["#Education", "#Learning", "#Documentary"],
             "shorts_candidates": shorts_candidates,
         }
         pub_dir = project_dir / "publishing"
