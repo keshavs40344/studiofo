@@ -92,8 +92,17 @@ class TenGateAuditor:
                 (project_id,),
             ).fetchall()
         ]
+        project_row = self.conn.execute(
+            "SELECT content_category FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
         canonical = json.dumps(
-            {"files": files, "claims": claims, "sources": sources, "coverage": coverage},
+            {
+                "content_category": project_row["content_category"] if project_row else "upsc",
+                "files": files,
+                "claims": claims,
+                "sources": sources,
+                "coverage": coverage,
+            },
             sort_keys=True, ensure_ascii=False, default=str,
         ).encode("utf-8")
         return hashlib.sha256(canonical).hexdigest()
