@@ -112,6 +112,7 @@ def test_user_notes_are_not_counted_as_external_research_or_complete_syllabus(tm
         "Definition",
         status=VerificationStatus.VERIFIED,
         source_id=note_source,
+        page_or_section="User supplied notes, unverified source",
     )
     SyllabusEngine(conn).map_chapter(
         project_id=project.id,
