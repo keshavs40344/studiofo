@@ -111,6 +111,10 @@ class TenGateAuditor:
             else {"black_frame_segments_detected": -1, "scenes_audited": len(scenes)}
         )
 
+        project_row = self.conn.execute(
+            "SELECT content_category FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        content_category = project_row["content_category"] if project_row else "upsc"
         coverage_rows = self.conn.execute(
             "SELECT status FROM coverage_ledger WHERE project_id = ? ORDER BY id",
             (project_id,),
@@ -121,6 +125,19 @@ class TenGateAuditor:
             status for status in coverage_statuses
             if status not in {"COVERED", "NOT_APPLICABLE"}
         ]
+        topic_map_path = self.project_dir / "research" / "topic_map.json"
+        topic_map_exists = topic_map_path.is_file()
+        topic_map = {}
+        if topic_map_exists:
+            try:
+                topic_map = json.loads(topic_map_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                topic_map = {}
+        topic_map_valid = (
+            isinstance(topic_map.get("topics"), list)
+            and len(topic_map["topics"]) > 0
+            and topic_map.get("content_category") == content_category
+        )
         external_sources = self.conn.execute(
             """
             SELECT COUNT(*) AS c FROM sources
@@ -170,7 +187,14 @@ class TenGateAuditor:
 
         gates: dict[str, str] = {
             "A_SYLLABUS_COMPLETENESS": (
-                "FAILED" if cov_count == 0 else ("PENDING" if unresolved_coverage else "PASSED")
+                "FAILED" if content_category == "upsc" and cov_count == 0
+                else (
+                    "PENDING" if content_category == "upsc" and unresolved_coverage
+                    else (
+                        "PENDING" if content_category != "upsc" and not topic_map_valid
+                        else ("PASSED" if reviewed("content_scope_coverage") else "PENDING")
+                    )
+                )
             ),
             "B_RESEARCH_SOURCE": "PASSED" if external_sources > 0 else "FAILED",
             "C_FACTUAL_ACCURACY": base_qa["academic"]["status"],
@@ -224,11 +248,19 @@ class TenGateAuditor:
                     "source_rows": source_count,
                     "external_sources_with_url": external_sources,
                 },
+                "CONTENT_SCOPE": {
+                    "category": content_category,
+                    "upsc_coverage_rows": cov_count,
+                    "upsc_unresolved_statuses": unresolved_coverage,
+                    "topic_map_exists": topic_map_exists,
+                    "topic_map_valid": topic_map_valid,
+                },
                 "MANUAL_REVIEW": {
                     "reviewer": reviewer or None,
                     "reviewed_at": manual_review.get("reviewed_at"),
                     "review_is_current": review_is_current,
                     "checks": {
+                        "content_scope_coverage": reviewed("content_scope_coverage"),
                         "teaching_clarity": reviewed("teaching_clarity"),
                         "visual_relevance": reviewed("visual_relevance"),
                         "voice_subtitle_alignment": reviewed("voice_subtitle_alignment"),
