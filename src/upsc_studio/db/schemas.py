@@ -116,6 +116,12 @@ class SceneSpec(BaseModel):
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class YouTubePublishRequest(BaseModel):
+    privacy_status: Literal["private", "unlisted", "public"] = "private"
+    approver: str = Field(..., min_length=2, max_length=120)
+    confirm_publish: bool = False
+
+
 class DubLanguageRequest(BaseModel):
     target_language: Literal["en", "hi", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "or"]
 
