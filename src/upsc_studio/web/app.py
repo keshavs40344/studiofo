@@ -177,12 +177,18 @@ async function loadProjects() {
   const list = await res.json();
   const el = document.getElementById('projects-list');
   if (!list.length) { el.innerHTML = '<p>No projects yet.</p>'; return; }
-  el.innerHTML = list.map(p =>
-    `<div class="proj-item" onclick="openProject('${p.id}')">
-       <strong>${p.name}</strong><br/>
-       <small>${p.content_category} · ${p.chapter_title} — <span class="badge ${p.status}">${p.status}</span></small>
-     </div>`
-  ).join('');
+  el.replaceChildren();
+  for (const p of list) {
+    const item = document.createElement('div');
+    item.className = 'proj-item';
+    item.addEventListener('click', () => openProject(p.id));
+    const name = document.createElement('strong');
+    name.textContent = p.name;
+    const details = document.createElement('small');
+    details.textContent = `${p.content_category} · ${p.chapter_title} — ${p.status}`;
+    item.append(name, document.createElement('br'), details);
+    el.appendChild(item);
+  }
 }
 
 async function createProject() {
@@ -231,14 +237,33 @@ async function openProject(id) {
   document.getElementById('review-subtitles').checked = reviewCurrent && checks.voice_subtitle_alignment === true;
   document.getElementById('review-playback').checked = reviewCurrent && checks.final_playback_inspection === true;
   const stageRows = data.pipeline_tasks || [];
-  document.getElementById('pipeline-stages').innerHTML = stageRows.length
-    ? stageRows.map(stage => `<div class="proj-item">
-        <strong>${stage.stage_name}</strong>
-        <span class="badge ${stage.status}">${stage.status}</span><br/>
-        <small>Attempts: ${stage.attempts} · Updated: ${stage.updated_at || 'not started'}</small>
-        ${stage.error ? `<p>${stage.error}</p>` : ''}
-      </div>`).join('')
-    : '<p>No production stages have been run yet.</p>';
+  const stageContainer = document.getElementById('pipeline-stages');
+  stageContainer.replaceChildren();
+  if (!stageRows.length) {
+    const empty = document.createElement('p');
+    empty.textContent = 'No production stages have been run yet.';
+    stageContainer.appendChild(empty);
+  } else {
+    for (const stage of stageRows) {
+      const item = document.createElement('div');
+      item.className = 'proj-item';
+      const heading = document.createElement('strong');
+      heading.textContent = stage.stage_name;
+      const status = document.createElement('span');
+      const allowedStatuses = ['PENDING', 'RUNNING', 'RETRY_WAIT', 'COMPLETED', 'FAILED', 'BLOCKED', 'SKIPPED', 'REVIEW_REQUIRED'];
+      status.textContent = allowedStatuses.includes(stage.status) ? stage.status : 'UNKNOWN';
+      status.className = 'badge ' + (allowedStatuses.includes(stage.status) ? stage.status : 'UNKNOWN');
+      const meta = document.createElement('small');
+      meta.textContent = `Attempts: ${Number(stage.attempts) || 0} · Updated: ${stage.updated_at || 'not started'}`;
+      item.append(heading, status, document.createElement('br'), meta);
+      if (stage.error) {
+        const error = document.createElement('p');
+        error.textContent = stage.error;
+        item.appendChild(error);
+      }
+      stageContainer.appendChild(item);
+    }
+  }
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
   await loadResearch();
 }
