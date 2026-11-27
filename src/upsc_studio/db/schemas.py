@@ -116,6 +116,11 @@ class SceneSpec(BaseModel):
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class ResearchDiscoveryRequest(BaseModel):
+    query: str = Field(..., min_length=4, max_length=300)
+    limit: int = Field(default=8, ge=1, le=10)
+
+
 class ResearchSourceCreate(BaseModel):
     title: str = Field(..., min_length=3, max_length=300)
     publisher: str = Field(..., min_length=2, max_length=200)
