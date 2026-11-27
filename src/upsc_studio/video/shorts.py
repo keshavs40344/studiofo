@@ -121,9 +121,10 @@ class ShortsRenderer:
             text_lines = lines[time_line_idx + 1:]
             if not text_lines:
                 continue
+            cue_text = "\n".join(text_lines)
             output.append(
                 f"{index}\n{cls._format_time(clipped_start - start_sec)} --> "
-                f"{cls._format_time(clipped_end - start_sec)}\n{'\n'.join(text_lines)}"
+                f"{cls._format_time(clipped_end - start_sec)}\n{cue_text}"
             )
             index += 1
         output_srt.parent.mkdir(parents=True, exist_ok=True)
