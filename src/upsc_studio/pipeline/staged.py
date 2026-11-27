@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -97,6 +98,102 @@ class StagedChapterPipeline:
         self.conn = conn
         self.projects_root = Path(projects_root)
         self.project_mgr = ProjectManager(conn, self.projects_root)
+
+    @staticmethod
+    def _resolve_input_bundle(
+        project_dir: Path,
+        notes_files: list[Path] | None,
+        typed_notes: str,
+    ) -> tuple[list[Path], str]:
+        """Persist a project input bundle and reuse it on voice-only continuation runs."""
+        root = (project_dir / "inputs" / "production_bundle").resolve()
+        files_dir = root / "files"
+        manifest_path = root / "input_manifest.json"
+        has_new_inputs = bool(notes_files) or bool(typed_notes.strip())
+
+        if has_new_inputs:
+            files_dir.mkdir(parents=True, exist_ok=True)
+            persisted: list[dict[str, str]] = []
+            for source_item in notes_files or []:
+                source = Path(source_item).expanduser().resolve()
+                if not source.is_file():
+                    raise FileNotFoundError(f"Notes file not found: {source}")
+                digest = sha256_file(source)
+                suffix = source.suffix.lower()
+                destination = files_dir / f"{digest}{suffix}"
+                if source != destination.resolve() and (
+                    not destination.is_file() or sha256_file(destination) != digest
+                ):
+                    temporary = destination.with_suffix(destination.suffix + ".tmp")
+                    shutil.copy2(source, temporary)
+                    temporary.replace(destination)
+                persisted.append({
+                    "path": destination.relative_to(project_dir.resolve()).as_posix(),
+                    "sha256": digest,
+                    "size": destination.stat().st_size,
+                })
+
+            typed_path: str | None = None
+            if typed_notes.strip():
+                typed_file = root / "typed_notes.txt"
+                typed_file.parent.mkdir(parents=True, exist_ok=True)
+                temporary = typed_file.with_suffix(".txt.tmp")
+                temporary.write_text(typed_notes, encoding="utf-8")
+                temporary.replace(typed_file)
+                typed_path = typed_file.relative_to(project_dir.resolve()).as_posix()
+
+            _write_json(
+                manifest_path,
+                {
+                    "version": 1,
+                    "files": persisted,
+                    "typed_notes_path": typed_path,
+                    "typed_notes_sha256": hashlib.sha256(
+                        typed_notes.encode("utf-8")
+                    ).hexdigest(),
+                },
+            )
+        elif manifest_path.is_file():
+            manifest = _read_json(manifest_path)
+            if manifest.get("version") != 1 or not isinstance(manifest.get("files"), list):
+                raise ValueError("Saved production input manifest is invalid; inspect or replace project inputs.")
+            resolved: list[Path] = []
+            project_root = project_dir.resolve()
+            for item in manifest["files"]:
+                if not isinstance(item, dict) or not isinstance(item.get("path"), str):
+                    raise ValueError("Saved input manifest contains an invalid file reference.")
+                candidate = (project_root / item["path"]).resolve()
+                try:
+                    candidate.relative_to(project_root)
+                except ValueError as exc:
+                    raise ValueError("Saved input path escapes the project workspace.") from exc
+                if not candidate.is_file():
+                    raise FileNotFoundError(
+                        f"Previously saved project input is missing: {candidate.name}. Re-upload the source file."
+                    )
+                if item.get("sha256") and sha256_file(candidate) != item["sha256"]:
+                    raise ValueError(
+                        f"Previously saved project input changed unexpectedly: {candidate.name}. Re-upload it."
+                    )
+                resolved.append(candidate)
+
+            typed_notes = ""
+            typed_relative = manifest.get("typed_notes_path")
+            if typed_relative:
+                typed_file = (project_root / str(typed_relative)).resolve()
+                try:
+                    typed_file.relative_to(project_root)
+                except ValueError as exc:
+                    raise ValueError("Saved typed-notes path escapes the project workspace.") from exc
+                if not typed_file.is_file():
+                    raise FileNotFoundError("Previously saved typed notes are missing; re-enter the notes.")
+                typed_notes = typed_file.read_text(encoding="utf-8")
+                expected_hash = manifest.get("typed_notes_sha256")
+                if expected_hash and hashlib.sha256(typed_notes.encode("utf-8")).hexdigest() != expected_hash:
+                    raise ValueError("Saved typed notes changed unexpectedly; re-enter the notes.")
+            return resolved, typed_notes
+
+        return [Path(p).expanduser().resolve() for p in (notes_files or [])], typed_notes
 
     @staticmethod
     def _file_fingerprint(paths: list[Path] | None, typed_notes: str) -> tuple[str, list[dict[str, Any]]]:
@@ -480,7 +577,9 @@ class StagedChapterPipeline:
         project_dir = Path(project.root_dir).resolve()
         if not project_dir.is_dir():
             raise FileNotFoundError(f"Project workspace does not exist: {project_dir}")
-        resolved_notes = [Path(p).expanduser().resolve() for p in (notes_files or [])]
+        resolved_notes, typed_notes = self._resolve_input_bundle(
+            project_dir, notes_files, typed_notes
+        )
         resolved_voice = Path(voice_path).expanduser().resolve() if voice_path is not None else None
         for path in resolved_notes:
             if not path.is_file():
