@@ -35,10 +35,27 @@ class TenGateAuditor:
             else {"black_frame_segments_detected": -1, "scenes_audited": len(scenes)}
         )
 
-        cov_count = self.conn.execute(
-            "SELECT COUNT(*) AS c FROM coverage_ledger WHERE project_id = ?", (project_id,)
+        coverage_rows = self.conn.execute(
+            "SELECT status FROM coverage_ledger WHERE project_id = ? ORDER BY id",
+            (project_id,),
+        ).fetchall()
+        cov_count = len(coverage_rows)
+        coverage_statuses = [str(row["status"]) for row in coverage_rows]
+        unresolved_coverage = [
+            status for status in coverage_statuses
+            if status not in {"COVERED", "NOT_APPLICABLE"}
+        ]
+        external_sources = self.conn.execute(
+            """
+            SELECT COUNT(*) AS c FROM sources
+            WHERE project_id = ?
+              AND source_tier <> 'USER_NOTES'
+              AND url IS NOT NULL
+              AND TRIM(url) <> ''
+            """,
+            (project_id,),
         ).fetchone()["c"]
-        src_count = self.conn.execute(
+        source_count = self.conn.execute(
             "SELECT COUNT(*) AS c FROM sources WHERE project_id = ?", (project_id,)
         ).fetchone()["c"]
 
@@ -51,8 +68,10 @@ class TenGateAuditor:
         )
 
         gates: dict[str, str] = {
-            "A_SYLLABUS_COMPLETENESS": "PASSED" if cov_count > 0 else "FAILED",
-            "B_RESEARCH_SOURCE": "PASSED" if src_count > 0 else "FAILED",
+            "A_SYLLABUS_COMPLETENESS": (
+                "FAILED" if cov_count == 0 else ("PENDING" if unresolved_coverage else "PASSED")
+            ),
+            "B_RESEARCH_SOURCE": "PASSED" if external_sources > 0 else "FAILED",
             "C_FACTUAL_ACCURACY": base_qa["academic"]["status"],
             "D_SCRIPT_COMPLETENESS": "PASSED" if (self.project_dir / "teaching" / "script_hinglish.md").exists() else "FAILED",
             "E_TEACHING_CLARITY": "PASSED" if (self.project_dir / "teaching" / "teaching_outline.md").exists() else "FAILED",
@@ -78,6 +97,16 @@ class TenGateAuditor:
         report = {
             "project_id": project_id,
             "gates": gates,
+            "gate_details": {
+                "A_SYLLABUS_COMPLETENESS": {
+                    "coverage_rows": cov_count,
+                    "unresolved_statuses": unresolved_coverage,
+                },
+                "B_RESEARCH_SOURCE": {
+                    "source_rows": source_count,
+                    "external_sources_with_url": external_sources,
+                },
+            },
             "passed_gates": passed,
             "failed_gates": failed,
             "pending_gates": pending,
