@@ -86,7 +86,9 @@ class TranslationService:
                 "setup": "Start a local LibreTranslate server or install Argos Translate and the required language models.",
             }
 
-    def _translate_one(\n        self, text: str, target_language: str, provider: str | None = None\n    ) -> tuple[str, str]:
+    def _translate_one(
+        self, text: str, target_language: str, provider: str | None = None
+    ) -> tuple[str, str]:
         target = target_language.lower()
         if target not in LANGUAGE_LABELS:
             raise ValueError(f"Unsupported target language code: {target_language}")
