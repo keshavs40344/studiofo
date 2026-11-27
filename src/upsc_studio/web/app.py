@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-import shutil
+import uuid
 from pathlib import Path
 from urllib.parse import urlparse
 from typing import Optional
@@ -463,23 +463,65 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
+        if len(typed_notes.encode("utf-8")) > 2 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Pasted notes exceed the 2 MB limit.")
+
         proj_dir = Path(proj.root_dir)
         tmp_dir = proj_dir / "inputs" / "uploads_tmp"
         tmp_dir.mkdir(parents=True, exist_ok=True)
 
+        def save_bounded_upload(
+            upload: UploadFile,
+            allowed_extensions: set[str],
+            max_bytes: int,
+            label: str,
+        ) -> Path:
+            original_name = (upload.filename or "").replace("\\", "/").split("/")[-1]
+            suffix = Path(original_name).suffix.lower()
+            if not original_name or suffix not in allowed_extensions:
+                raise HTTPException(
+                    status_code=415,
+                    detail=f"{label} extension must be one of: {', '.join(sorted(allowed_extensions))}.",
+                )
+            destination = tmp_dir / f"{uuid.uuid4().hex}{suffix}"
+            written = 0
+            try:
+                with destination.open("wb") as output:
+                    while True:
+                        chunk = upload.file.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        written += len(chunk)
+                        if written > max_bytes:
+                            raise HTTPException(
+                                status_code=413,
+                                detail=f"{label} exceeds the {max_bytes // (1024 * 1024)} MB limit.",
+                            )
+                        output.write(chunk)
+                if written == 0:
+                    raise HTTPException(status_code=400, detail=f"{label} file is empty.")
+                return destination
+            except Exception:
+                destination.unlink(missing_ok=True)
+                raise
+
         notes_paths: list[Path] = []
         if notes_file and notes_file.filename:
-            dest = tmp_dir / Path(notes_file.filename).name
-            with dest.open("wb") as out:
-                shutil.copyfileobj(notes_file.file, out)
-            notes_paths.append(dest)
+            notes_paths.append(save_bounded_upload(
+                notes_file,
+                {".pdf", ".docx", ".pptx", ".xlsx", ".txt", ".md"},
+                100 * 1024 * 1024,
+                "Notes file",
+            ))
 
         voice_path: Optional[Path] = None
         if voice_file and voice_file.filename:
-            vdest = tmp_dir / Path(voice_file.filename).name
-            with vdest.open("wb") as out:
-                shutil.copyfileobj(voice_file.file, out)
-            voice_path = vdest
+            voice_path = save_bounded_upload(
+                voice_file,
+                {".wav", ".mp3", ".m4a"},
+                250 * 1024 * 1024,
+                "Voice recording",
+            )
 
         producer = ExecutiveProducer(conn, resolved_projects)
         return producer.execute_task_graph(
