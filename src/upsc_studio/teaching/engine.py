@@ -11,11 +11,10 @@ from upsc_studio.db.schemas import VerificationStatus
 
 
 class TeachingEngine:
-    """Generates structured UPSC teaching scripts, recording prompts, and study materials.
-    
-    Includes automatic syllabus-preserving expansion when target duration demands deeper
-    pedagogical coverage (e.g. historical context, constitutional debates, comparative analysis,
-    landmark precedents, implementation challenges).
+    """Builds UPSC teaching materials from claims explicitly marked VERIFIED.
+
+    Unverified statements are excluded. Duration shortfalls are reported rather than
+    filled with invented historical, legal, statistical, or institutional details.
     """
 
     WORDS_PER_MINUTE = 130.0  # Measured comfortable Hinglish teaching pace
@@ -72,8 +71,15 @@ class TeachingEngine:
             f"- **Total Words:** {total_words}",
             f"- **Estimated Duration:** {estimated_minutes} minutes",
             f"- **Narration Mode:** {'TTS Enabled' if tts_enabled else 'USER OWN VOICE ONLY (TTS Disabled)'}",
+            f"- **Evidence Status:** {len(verified_claims)} VERIFIED claim(s); {len(blocked_claims)} excluded claim(s)",
+            f"- **Content Readiness:** {'READY_FOR_HUMAN_REVIEW' if verified_claims and not blocked_claims else 'INSUFFICIENT_EVIDENCE'}",
             "",
         ]
+        if not verified_claims or blocked_claims:
+            script_lines.extend([
+                "> **Release restriction:** This is a draft. Insufficient or unverified evidence remains. Do not treat it as a fact-checked lesson or publish it.",
+                "",
+            ])
         if blocked_claims:
             script_lines.append(
                 f"> **Notice:** {len(blocked_claims)} unverified/pending claim(s) were excluded from final narration and logged in `research/unresolved_claims.md`."
@@ -96,7 +102,7 @@ class TeachingEngine:
         rec_lines = [
             f"# Own-Voice Recording Script — {chapter_title}",
             "",
-            "Record each section clearly in a quiet room. Keep raw files unmodified; UPSC Studio will process and align them.",
+            "Record only after checking the evidence status above. This draft contains only claims marked VERIFIED; placeholders mean insufficient information. Keep the raw recording unmodified.",
             "",
         ]
         for sec in sections:
@@ -116,7 +122,7 @@ class TeachingEngine:
         prelims_lines = [
             f"# Prelims Track — {chapter_title}",
             "",
-            "## Key Factual Points & Constitutional/Institutional Anchors",
+            "## Source-Backed Factual Points (Only Claims Marked VERIFIED)",
         ]
         for c in verified_claims:
             prelims_lines.append(f"- [{c['id']}] {c['statement']} (Ref: {c['page_or_section'] or 'verified source'})")
@@ -127,15 +133,16 @@ class TeachingEngine:
         mains_lines = [
             f"# Mains Analytical Track — {chapter_title}",
             "",
-            "## Multi-Dimensional Analysis",
-            "- **Constitutional & Legal:** Examine statutory/constitutional basis and judicial interpretation.",
-            "- **Institutional & Governance:** Assess accountability, neutrality, and implementation gaps.",
-            "- **Way Forward:** Evidence-backed reforms and committee recommendations.",
+            "## Evidence-Led Answer Framework",
+            "- **Definition and scope:** Use a source-backed definition; do not infer missing details.",
+            "- **Context and mechanism:** Include only steps and institutions directly supported by reviewed sources.",
+            "- **Implications and debates:** Separate sourced facts from analysis; cite each factual example.",
+            "- **Limitations and reforms:** Include criticism, court cases, committees, and recommendations only when independently sourced and verified.",
             "",
-            "## Practice Answer Framework (Educational Example — Not Official UPSC Answer)",
-            "1. **Introduction:** Define the core concept with constitutional/statutory context.",
-            "2. **Body:** Present 3–4 structured dimensions with balanced arguments and counterarguments.",
-            "3. **Conclusion:** Forward-looking institutional reform linked to democratic accountability.",
+            "## Practice Answer Structure (Framework, Not a Model Answer)",
+            "1. **Introduction:** Define the topic using verified material.",
+            "2. **Body:** Organise the available evidence into relevant dimensions; label evidence gaps.",
+            "3. **Conclusion:** Summarise supported findings without inventing a recommendation.",
         ]
         (self.teaching_dir / "mains_track.md").write_text("\n".join(mains_lines), encoding="utf-8")
 
@@ -165,14 +172,16 @@ class TeachingEngine:
 
         # Definitions and concept mind map
         mindmap_lines = [
-            f"# Core Definitions & Mind Map — {chapter_title}",
+            f"# Evidence-Led Concept Map — {chapter_title}",
+            "",
+            "> The branches below are an organising framework, not claims that each dimension applies to this topic.",
             "",
             "```mermaid",
             "graph TD",
-            f"    A[\"{chapter_title}\"] --> B[\"Constitutional Foundation\"]",
-            f"    A --> C[\"Operational Mechanism\"]",
-            f"    A --> D[\"Judicial Doctrine & Evolution\"]",
-            f"    A --> E[\"Contemporary Issues & Reforms\"]",
+            f"    A[\"{chapter_title}\"] --> B[\"Definitions and Scope\"]",
+            f"    A --> C[\"Source-Backed Concepts\"]",
+            f"    A --> D[\"Processes (Only If Sourced)\"]",
+            f"    A --> E[\"Implications and Open Questions\"]",
             "```",
             "",
         ]
@@ -181,27 +190,20 @@ class TeachingEngine:
         # 6. Practice question bank (explicitly labelled as generated practice items, never PYQs)
         qbank = {
             "chapter_title": chapter_title,
-            "note": "Generated practice questions are labelled PRACTICE_GENERATED, distinct from verified UPSC PYQs.",
-            "prelims_practice_mcqs": [
-                {
-                    "id": "MCQ_PRAC_1",
-                    "label": "PRACTICE_GENERATED",
-                    "question": f"With reference to '{chapter_title}', consider the core constitutional/institutional mechanism discussed in this chapter. Which statement best reflects its primary purpose?",
-                    "options": [
-                        "Ensuring institutional accountability and stability",
-                        "Replacing parliamentary oversight with executive decree",
-                        "Eliminating judicial review completely",
-                        "None of the above",
-                    ],
-                    "answer_index": 0,
-                    "explanation": "Derived from the core conceptual objective of the chapter.",
-                }
-            ],
+            "note": (
+                "No objective MCQ or official PYQ is fabricated. Verified PYQs must be imported "
+                "from an authenticated question source; generated questions require answer-key review."
+            ),
+            "prelims_practice_mcqs": [],
+            "mcq_generation_status": "NOT_GENERATED_INSUFFICIENT_AUTHENTICATED_QUESTION_DATA",
             "mains_practice_questions": [
                 {
-                    "id": "MAINS_PRAC_1",
-                    "label": "PRACTICE_GENERATED",
-                    "question": f"Critically examine the working, challenges, and needed reforms in '{chapter_title}' in the context of Indian democracy. (250 words / 15 marks)",
+                    "id": "MAINS_PROMPT_1",
+                    "label": "PRACTICE_PROMPT_REVIEW_REQUIRED",
+                    "question": (
+                        f"Explain '{chapter_title}' using only the verified source-backed points "
+                        "in this chapter. Identify any unresolved evidence gaps."
+                    ),
                 }
             ],
             "verified_pyqs": [],
@@ -221,6 +223,10 @@ class TeachingEngine:
             "estimated_duration_min": estimated_minutes,
             "verified_claims_used": len(verified_claims),
             "blocked_claims_excluded": len(blocked_claims),
+            "content_readiness": (
+                "READY_FOR_HUMAN_REVIEW" if verified_claims and not blocked_claims
+                else "INSUFFICIENT_EVIDENCE"
+            ),
             "sections": sections,
         }
 
@@ -232,112 +238,98 @@ class TeachingEngine:
         notes_excerpt: str,
         target_duration_min: int = 5,
     ) -> list[dict[str, Any]]:
-        claim_ids = [c["id"] for c in verified_claims]
-        evidence_summary = (
-            " ".join(c["statement"] for c in verified_claims[:4])
-            if verified_claims
-            else (notes_excerpt[:400].strip() or f"{chapter_title} is a core UPSC General Studies topic.")
-        )
+        """Create narration only from explicitly verified claim text.
 
-        # Baseline 5 foundational sections
+        The target duration is intentionally not filled with invented content. The
+        duration planner reports a shortfall so that more research is added instead.
+        """
+        del notes_excerpt, target_duration_min
+        claim_ids = [str(item["id"]) for item in verified_claims]
+
+        def claim_block(items: list[dict[str, Any]], heading: str) -> str:
+            if not items:
+                return (
+                    f"{heading}\n"
+                    "Insufficient information: no matching source-backed claim is marked VERIFIED. "
+                    "Add and review suitable sources before recording this section."
+                )
+            lines = [heading]
+            lines.extend(f"- [{item['id']}] {item['statement']}" for item in items)
+            return "\n".join(lines)
+
+        first = verified_claims[:3]
+        middle = verified_claims[3:6]
+        later = verified_claims[6:9]
+        all_claims_text = claim_block(verified_claims, "Verified source-backed points for revision:")
         raw_sections = [
             {
                 "section_id": "SEC_01",
-                "title": "Introduction & Why This Chapter Matters",
-                "objective": f"Establish UPSC relevance of {chapter_title} across {primary_papers}.",
+                "title": "Introduction, Scope & Learning Objectives",
+                "objective": f"Introduce {chapter_title} and define the scope of this lesson without adding unsourced facts.",
                 "claim_ids": [],
                 "visual_category": "Motion Graphics / Title Card",
                 "narration": (
-                    f"Namaste aur swagat hai UPSC Studio mein. Aaj hum detail mein padhenge '{chapter_title}'. "
-                    f"Yeh chapter UPSC syllabus mein {primary_papers} ke liye bahut important hai, kyunki Prelims mein iske factual provisions aur Mains mein iska analytical impact directly pucha jaata hai. "
-                    f"Is lecture mein hum basic concepts se lekar critical case laws aur exam-ready frameworks tak cover karenge."
+                    f"Namaste aur swagat hai UPSC Studio mein. Aaj hum '{chapter_title}' ko "
+                    "source-led tareeke se samjhenge. Is script mein factual statements wahi honge "
+                    "jo project evidence ledger mein VERIFIED mark kiye gaye hain. "
+                    f"Current syllabus mapping: {primary_papers}. Is mapping ko bhi final use se pehle review karein."
                 ),
             },
             {
                 "section_id": "SEC_02",
-                "title": "Core Definitions & Conceptual Foundation",
-                "objective": "Define key terms clearly in Hinglish while retaining exact standard terminology.",
-                "claim_ids": claim_ids[:2],
+                "title": "Definition, Core Concepts & Scope",
+                "objective": "Present only reviewed definitions and claims; clearly identify missing evidence.",
+                "claim_ids": [str(item["id"]) for item in first],
                 "visual_category": "Learning Screen / Definition Card",
-                "narration": (
-                    f"Sabse pehle basic meaning samajhte hain. {chapter_title} ka core objective hai governance aur institutional accountability ko strong banana. "
-                    f"Verified context ke hisaab se: {evidence_summary}. "
-                    "Constitutional structure mein yeh provisions individuals ke rights aur state ke obligations ko balance karte hain."
+                "narration": claim_block(
+                    first,
+                    f"'{chapter_title}' ke available verified source-backed points:",
                 ),
             },
             {
                 "section_id": "SEC_03",
-                "title": "Mechanism, Process & Institutional Structure",
-                "objective": "Explain step-by-step how the system or provision operates in practice.",
-                "claim_ids": claim_ids[2:4],
+                "title": "Structure, Process & How It Works",
+                "objective": "Describe a process only when its steps are explicitly present in verified evidence.",
+                "claim_ids": [str(item["id"]) for item in middle],
                 "visual_category": "Concept Animation / Flowchart",
                 "narration": (
-                    "Ab dekhte hain ki yeh mechanism step-by-step kaise kaam karta hai. "
-                    "Har constitutional ya institutional process mein teen stages hoti hain: trigger condition, decision authority, aur judicial ya parliamentary review. "
-                    "Is flowchart ke through aap clear sequence dekh sakte hain ki powers aur checks-and-balances kaise operate karte hain."
+                    "Is section mein koi sequence ya mechanism apne aap infer nahi kiya jayega. "
+                    + claim_block(
+                        middle,
+                        "Source material mein is section ke liye available verified points:",
+                    )
                 ),
             },
             {
                 "section_id": "SEC_04",
-                "title": "Challenges, Critical Analysis & Reforms",
-                "objective": "Balance arguments, limitations, and UPSC Mains way-forward reforms.",
-                "claim_ids": [],
+                "title": "Implications, Challenges & Debates",
+                "objective": "Separate source-backed implications from analysis; do not invent cases, data, or recommendations.",
+                "claim_ids": [str(item["id"]) for item in later],
                 "visual_category": "Data / Comparison Table",
                 "narration": (
-                    "Mains answer writing ke liye sirf provisions yaad rakhna kaafi nahi hai; humein challenges aur reforms bhi samajhne honge. "
-                    "Ek taraf institutional stability zaroori hai, toh doosri taraf impartiality aur timely decision-making par bhi questions uthte hain. "
-                    "Law Commission reports aur judicial observations humein ek balanced way forward dete hain."
+                    "Challenges, statistics, court cases, committee findings aur reforms tabhi "
+                    "include honge jab unke liye specific reviewed sources available hon. "
+                    + claim_block(
+                        later,
+                        "Is section ke verified source-backed points:",
+                    )
                 ),
             },
             {
                 "section_id": "SEC_05",
-                "title": "Prelims Points, Mains Framework & Recap",
-                "objective": "Consolidate exam-ready takeaways and practice questions.",
+                "title": "Revision, Exam Framework & Evidence Gaps",
+                "objective": "Recap verified material and identify what still needs research or human review.",
                 "claim_ids": claim_ids,
                 "visual_category": "Summary & Practice Screen",
-                "narration": (
-                    f"Chaliye jaldi se recap karte hain. Aaj humne {chapter_title} ke definitions, step-by-step mechanism, aur critical reforms cover kiye. "
-                    "Prelims ke liye exact articles aur authorities revise karein, aur Mains ke liye balanced intro-body-conclusion framework use karein."
-                ),
+                "narration": all_claims_text,
             },
         ]
 
-        # Automatic syllabus-preserving expansion if target duration >= 7 minutes
-        # Adds authentic UPSC pedagogical dimensions without meaningless filler words
-        if target_duration_min >= 7:
-            extra_sections = [
-                {
-                    "section_id": "SEC_03B",
-                    "title": "Historical Genesis & Constituent Assembly Debates",
-                    "objective": "Understand the original constitutional intent, historical evolution, and drafting debates.",
-                    "claim_ids": claim_ids[:1],
-                    "visual_category": "Historical Timeline / Archive Card",
-                    "narration": (
-                        f"Is provision ko deeply samajhne ke liye humein Constituent Assembly debates aur iske historical origin ko dekhna hoga. "
-                        f"Framers of the Constitution ne deliberately individual liberty aur public order ke beech ek conscious balance create kiya tha. "
-                        f"Dr. B.R. Ambedkar ne specifically highlight kiya tha ki fundamental guarantees bina effective enforcement machinery ke meaningless hain, "
-                        f"isliye institutional protection ko basic structure ka inviolable part banaya gaya."
-                    ),
-                },
-                {
-                    "section_id": "SEC_04B",
-                    "title": "Landmark Judicial Precedents & Evolution",
-                    "objective": "Analyze Supreme Court doctrines, expanding interpretations, and constitutional tests.",
-                    "claim_ids": claim_ids[1:3],
-                    "visual_category": "Judicial Precedents & Case Law Matrix",
-                    "narration": (
-                        f"Supreme Court of India ke landmark judgments ne {chapter_title} ke scope ko over decades enrich kiya hai. "
-                        f"Literal interpretation se move karke judiciary ne purposive interpretation aur substantive due process adopt kiya. "
-                        f"Maneka Gandhi case se lekar Puttaswamy judgment tak, golden triangle principles (Articles 14, 19, 21) apply hote hain, "
-                        f"jisse state actions par proportionality aur non-arbitrariness ka strict test lagaya jata hai."
-                    ),
-                },
-            ]
-            raw_sections.insert(3, extra_sections[0])
-            raw_sections.insert(5, extra_sections[1])
-
-        for sec in raw_sections:
-            words = len(sec["narration"].split())
-            sec["duration_sec"] = max(6.0, round((words / self.WORDS_PER_MINUTE) * 60.0 + 1.5, 1))
+        for section in raw_sections:
+            word_count = len(section["narration"].split())
+            section["duration_sec"] = max(
+                6.0,
+                round((word_count / self.WORDS_PER_MINUTE) * 60.0 + 1.5, 1),
+            )
 
         return raw_sections
