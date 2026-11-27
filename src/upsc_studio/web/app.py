@@ -43,6 +43,8 @@ from upsc_studio.tts.adapter import PiperTTSEngine
 from upsc_studio.graphics.rights import AssetRightsLedger
 from upsc_studio.video.renderer import VideoRenderer
 from upsc_studio.publishing.youtube_publisher import YouTubePublisher
+from upsc_studio.pipeline.monitoring import RuntimeMonitor
+from upsc_studio.pipeline.recovery import RecoveryCoordinator
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -206,6 +208,16 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <button class="secondary" onclick="prepareRetry()">Prepare Failed-Stage Retry</button>
           <p>After preparation, click Run Production again. Saved notes and voice recordings are reused when no new files are supplied.</p>
         </div>
+        <div class="card" style="background:#0f172a;" id="operations-card">
+          <h3>Production Control Centre & Operations</h3>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button class="secondary" onclick="runAutoRecovery()">Auto-Recover / Quarantine</button>
+            <button class="secondary" onclick="cleanTempFiles()">Clean Temp Files</button>
+            <button class="secondary" onclick="verifyDatabaseIntegrity()">Verify DB Integrity</button>
+            <button class="secondary" onclick="refreshOperations()">Refresh Operations Status</button>
+          </div>
+          <div id="operations-summary"><p>Select or run a project to view operational observability metrics.</p></div>
+        </div>
         <h3>Rendered Shorts</h3>
         <div id="rendered-shorts"><p>No Shorts rendered yet.</p></div>
         <h3>Pipeline Output & Diagnostics</h3>
@@ -344,6 +356,7 @@ async function openProject(id) {
   }
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
   await loadResearch();
+  await refreshOperations();
 }
 
 async function refreshYouTubeStatus() {
@@ -552,6 +565,54 @@ async function approveCurrent() {
   const data = await res.json();
   if (!res.ok) { alert('Cannot approve: ' + data.detail); return; }
   await openProject(currentProjectId);
+}
+
+async function refreshOperations() {
+  if (!currentProjectId) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/operations`);
+  const data = await res.json();
+  const el = document.getElementById('operations-summary');
+  if (!res.ok) {
+    el.innerHTML = `<p style="color:#ef4444;">Operations error: ${data.detail || 'Unavailable'}</p>`;
+    return;
+  }
+  const stagesHtml = (data.stages || []).map(s => {
+    const dur = s.duration_sec ? `${s.duration_sec}s` : '-';
+    const err = s.error_category ? ` · [${s.error_category}]` : '';
+    return `<div class="proj-item"><strong>${s.stage}</strong> <span class="badge ${s.status}">${s.status}</span> <small>Attempts: ${s.attempts} · Dur: ${dur}${err}</small></div>`;
+  }).join('');
+  const resHtml = data.system_resources ? `CPU: ${data.system_resources.system_cpu_percent}% · RAM: ${data.system_resources.process_memory_rss_mb} MB (Process) · Free Disk: ${data.system_resources.free_disk_gb} GB` : '';
+  const elig = data.recovery_eligibility || {};
+  const eligHtml = elig.action ? `Action: <strong>${elig.action}</strong> · Suggestion: ${elig.recovery_suggestion || elig.recommended_action || 'None'}` : '';
+  el.innerHTML = `
+    <div style="margin-bottom:8px;"><small>${resHtml}</small></div>
+    <div style="margin-bottom:8px;">${eligHtml}</div>
+    <div style="margin-bottom:8px;"><strong>Stage Progress:</strong>${stagesHtml}</div>
+  `;
+}
+
+async function runAutoRecovery() {
+  if (!currentProjectId) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/recover`, { method: 'POST' });
+  const data = await res.json();
+  alert(`Auto-recovery completed: ${data.interrupted_tasks_quarantined.length} interrupted tasks quarantined, ${data.temporary_artifacts_cleaned.count} temp files cleaned.`);
+  await openProject(currentProjectId);
+}
+
+async function cleanTempFiles() {
+  if (!currentProjectId) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/cleanup-temp`, { method: 'POST' });
+  const data = await res.json();
+  alert(`Cleaned ${data.count} temp files (${(data.bytes_freed / 1024).toFixed(1)} KB freed).`);
+  await refreshOperations();
+}
+
+async function verifyDatabaseIntegrity() {
+  if (!currentProjectId) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/verify-db`, { method: 'POST' });
+  const data = await res.json();
+  alert(`DB Integrity: ${data.integrity_check} | Foreign Keys: ${data.foreign_key_violations ? data.foreign_key_violations.length : 0} violations.`);
+  await refreshOperations();
 }
 
 loadHardware();
@@ -1385,5 +1446,52 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         if not mp4.exists():
             raise HTTPException(status_code=404, detail="Final video not rendered yet.")
         return FileResponse(mp4, media_type="video/mp4", filename=f"{proj.slug}.mp4")
+
+    @app.get("/api/projects/{project_id}/operations")
+    def get_project_operations(project_id: str) -> dict:
+        try:
+            mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        monitor = RuntimeMonitor(conn, resolved_projects)
+        return monitor.get_live_project_status(project_id)
+
+    @app.post("/api/projects/{project_id}/recover")
+    def auto_recover_project(project_id: str) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        recovery = RecoveryCoordinator(conn, resolved_projects)
+        interrupted = recovery.detect_interrupted_tasks(project_id)
+        temp_cleaned = recovery.clean_temporary_artifacts(Path(proj.root_dir))
+        db_status = recovery.check_database_integrity()
+        freshness = recovery.validate_approval_freshness(project_id, Path(proj.root_dir))
+        eligibility = recovery.assess_recovery_eligibility(project_id, Path(proj.root_dir))
+        return {
+            "project_id": project_id,
+            "status": "RECOVERED",
+            "interrupted_tasks_quarantined": interrupted,
+            "temporary_artifacts_cleaned": temp_cleaned,
+            "database_integrity": db_status,
+            "approval_freshness": freshness,
+            "recovery_eligibility": eligibility,
+            "recovered_at": utc_now_iso(),
+        }
+
+    @app.post("/api/projects/{project_id}/cleanup-temp")
+    def cleanup_temp_files(project_id: str) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        recovery = RecoveryCoordinator(conn, resolved_projects)
+        result = recovery.clean_temporary_artifacts(Path(proj.root_dir))
+        return {"project_id": project_id, **result}
+
+    @app.post("/api/projects/{project_id}/verify-db")
+    def verify_database() -> dict:
+        recovery = RecoveryCoordinator(conn, resolved_projects)
+        return recovery.check_database_integrity()
 
     return app

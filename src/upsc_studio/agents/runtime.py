@@ -73,6 +73,9 @@ class AgentTaskStore:
             max_retries INTEGER NOT NULL DEFAULT 2,
             output_json TEXT,
             error TEXT,
+            error_category TEXT,
+            duration_sec REAL,
+            resource_usage_json TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             started_at TEXT,
@@ -97,6 +100,11 @@ class AgentTaskStore:
             FOREIGN KEY(task_id) REFERENCES agent_tasks(task_id)
         );
         """)
+        for col_name, col_type in [("error_category", "TEXT"), ("duration_sec", "REAL"), ("resource_usage_json", "TEXT")]:
+            try:
+                self.conn.execute(f"ALTER TABLE agent_tasks ADD COLUMN {col_name} {col_type}")
+            except sqlite3.OperationalError:
+                pass
         self.conn.commit()
 
     def _event(self, task_id: str, workflow_id: str, event: str, detail: Any = None) -> None:
@@ -140,7 +148,16 @@ class AgentTaskStore:
         )
         return [_row_dict(cur, row) for row in cur.fetchall()]  # type: ignore[misc]
 
-    def transition(self, task_id: str, status: str, *, output: Any = None, error: str | None = None) -> None:
+    def transition(
+        self,
+        task_id: str,
+        status: str,
+        *,
+        output: Any = None,
+        error: str | None = None,
+        error_category: str | None = None,
+        resource_usage: Any = None,
+    ) -> None:
         allowed = {
             "PENDING": {"RUNNING", "BLOCKED", "SKIPPED"},
             "RETRY_WAIT": {"RUNNING", "FAILED", "BLOCKED", "REVIEW_REQUIRED"},
@@ -155,14 +172,25 @@ class AgentTaskStore:
         now = _now()
         started = now if status == "RUNNING" and not row["started_at"] else row["started_at"]
         finished = now if status in TERMINAL else None
+        duration_sec = row.get("duration_sec")
+        if finished and started:
+            try:
+                s_dt = datetime.fromisoformat(started)
+                f_dt = datetime.fromisoformat(finished)
+                duration_sec = round((f_dt - s_dt).total_seconds(), 3)
+            except Exception:
+                pass
         attempts = int(row["attempts"]) + (1 if status == "RUNNING" else 0)
+        final_category = error_category or row.get("error_category")
         self.conn.execute(
-            """UPDATE agent_tasks SET status=?, output_json=?, error=?, attempts=?,
+            """UPDATE agent_tasks SET status=?, output_json=?, error=?, error_category=?,
+            duration_sec=?, resource_usage_json=?, attempts=?,
             updated_at=?, started_at=?, finished_at=? WHERE task_id=?""",
             (status, _json(output) if output is not None else row["output_json"], error,
+             final_category, duration_sec, _json(resource_usage) if resource_usage is not None else row.get("resource_usage_json"),
              attempts, now, started, finished, task_id),
         )
-        self._event(task_id, row["workflow_id"], status, {"error": error} if error else output)
+        self._event(task_id, row["workflow_id"], status, {"error": error, "error_category": final_category} if error else output)
         self.conn.commit()
 
     def quarantine_interrupted(self, workflow_id: str) -> list[str]:
@@ -170,8 +198,12 @@ class AgentTaskStore:
         quarantined = []
         for row in self.list_workflow(workflow_id):
             if row["status"] == "RUNNING":
-                self.transition(row["task_id"], "REVIEW_REQUIRED",
-                                error="Handler was interrupted; inspect side effects before manual recovery.")
+                self.transition(
+                    row["task_id"],
+                    "REVIEW_REQUIRED",
+                    error="Handler was interrupted mid-execution; inspect side effects before manual recovery.",
+                    error_category="FILESYSTEM_FAILURE",
+                )
                 quarantined.append(row["task_id"])
         return quarantined
 
@@ -378,26 +410,55 @@ class DependencyScheduler:
                     continue
                 while True:
                     self.store.transition(task_id, "RUNNING")
+                    t0 = time.perf_counter()
                     try:
                         payload = dict(spec.payload)
                         payload["_workflow_id"] = workflow_id
                         payload["_task_id"] = task_id
                         payload["_dependency_outputs"] = {dep: json.loads(self.store.get(ids[dep])["output_json"] or "{}") for dep in spec.depends_on}
                         output = self.handlers[spec.handler](payload)
+                        elapsed = round(time.perf_counter() - t0, 3)
                         business_status = output.get("status") if isinstance(output, Mapping) else None
                         task_status = business_status if business_status in {"FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"} else "COMPLETED"
                         task_error = output.get("error") if task_status != "COMPLETED" and isinstance(output, Mapping) else None
-                        self.store.transition(task_id, task_status, output=output, error=task_error)
+                        task_cat = output.get("error_category") if isinstance(output, Mapping) else None
+                        self.store.transition(
+                            task_id,
+                            task_status,
+                            output=output,
+                            error=task_error,
+                            error_category=task_cat,
+                            resource_usage={"duration_sec": elapsed},
+                        )
                         progress = True
                         break
                     except Exception as exc:
+                        from upsc_studio.core.errors import classify_error
+                        elapsed = round(time.perf_counter() - t0, 3)
                         latest = self.store.get(task_id)
-                        transient = isinstance(exc, (TimeoutError, ConnectionError))
-                        retry = transient and spec.retry_safe and int(latest["attempts"]) <= int(latest["max_retries"])
+                        classified = classify_error(exc)
+                        retry = (
+                            classified.is_retryable
+                            and spec.retry_safe
+                            and int(latest["attempts"]) <= int(latest["max_retries"])
+                        )
                         if retry:
-                            self.store.transition(task_id, "RETRY_WAIT", error=f"{type(exc).__name__}: {exc}")
+                            self.store.transition(
+                                task_id,
+                                "RETRY_WAIT",
+                                error=f"{type(exc).__name__}: {exc}",
+                                error_category=classified.category.value,
+                                resource_usage={"duration_sec": elapsed},
+                            )
                             continue
-                        self.store.transition(task_id, "FAILED" if not transient else "REVIEW_REQUIRED", error=f"{type(exc).__name__}: {exc}")
+                        target_status = "REVIEW_REQUIRED" if classified.requires_human_review else "FAILED"
+                        self.store.transition(
+                            task_id,
+                            target_status,
+                            error=f"{type(exc).__name__}: {exc}",
+                            error_category=classified.category.value,
+                            resource_usage={"duration_sec": elapsed},
+                        )
                         progress = True
                         break
         final_rows = [self.store.get(ids[s.task_id]) for s in items]
