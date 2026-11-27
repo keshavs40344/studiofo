@@ -1,5 +1,7 @@
 """API tests for project-scoped human evidence attestation."""
 
+from pathlib import Path
+
 from fastapi.testclient import TestClient
 
 from upsc_studio.db.database import init_db
