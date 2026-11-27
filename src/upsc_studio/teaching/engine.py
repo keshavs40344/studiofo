@@ -44,6 +44,10 @@ class TeachingEngine:
         ]
         verified_claims = [c for c in claims if c["status"] == VerificationStatus.VERIFIED.value]
         blocked_claims = [c for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
+        if not verified_claims:
+            raise ValueError(
+                "Teaching script generation is blocked: no claims have explicit human evidence attestation."
+            )
 
         primary_papers = ", ".join(chapter_map.get("primary_papers", ["Mains GS"]))
         sections = self._build_sections(
