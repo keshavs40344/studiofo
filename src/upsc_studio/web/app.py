@@ -456,6 +456,43 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         ).fetchone()["cnt"]
         return {"project": proj.model_dump(), "qa_gates": gates, "claims_count": claims_count}
 
+    @app.post("/api/projects/{project_id}/claims/{claim_id}/attest")
+    def attest_claim_evidence(project_id: str, claim_id: str, payload: dict) -> dict:
+        """Record a reviewer-declared source excerpt; reviewer_id is an audit label, not authentication."""
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        claim = conn.execute(
+            "SELECT id, project_id FROM claims WHERE id = ?", (claim_id,)
+        ).fetchone()
+        if not claim or claim["project_id"] != project_id:
+            raise HTTPException(status_code=404, detail="Claim not found in this project.")
+
+        from upsc_studio.research.verifier import EvidenceEngine
+        engine = EvidenceEngine(conn, Path(proj.root_dir))
+        try:
+            engine.verify_claim_against_source(
+                claim_id=claim_id,
+                source_id=str(payload.get("source_id", "")),
+                page_or_section=str(payload.get("page_or_section", "")),
+                evidence_excerpt=str(payload.get("evidence_excerpt", "")),
+                ref_period=payload.get("ref_period"),
+                reviewer_id=str(payload.get("reviewer_id", "")),
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        return {
+            "claim_id": claim_id,
+            "status": "VERIFIED",
+            "attestation_recorded": True,
+            "reviewer_id": str(payload.get("reviewer_id", "")).strip(),
+            "identity_authenticated": False,
+            "notice": "Reviewer ID is an audit label only. The reviewer must inspect the original source and excerpt.",
+        }
+
     @app.post("/api/projects/{project_id}/run")
     async def run_project_pipeline(
         project_id: str,
