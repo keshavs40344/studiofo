@@ -106,16 +106,17 @@ class ProjectManager:
             self.conn.execute(
                 """
                 INSERT INTO projects (
-                    id, name, slug, chapter_title, exam_cycle, cutoff_date,
+                    id, name, slug, chapter_title, content_category, exam_cycle, cutoff_date,
                     target_duration_min, tts_enabled, root_dir, status,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record.id,
                     record.name,
                     record.slug,
                     record.chapter_title,
+                    record.content_category,
                     record.exam_cycle,
                     record.cutoff_date,
                     record.target_duration_min,
@@ -443,14 +444,15 @@ class ProjectManager:
             self.conn.execute(
                 """
                 INSERT INTO projects (
-                    id, name, slug, chapter_title, exam_cycle, cutoff_date,
+                    id, name, slug, chapter_title, content_category, exam_cycle, cutoff_date,
                     target_duration_min, tts_enabled, root_dir, status,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     slug = excluded.slug,
                     chapter_title = excluded.chapter_title,
+                    content_category = excluded.content_category,
                     exam_cycle = excluded.exam_cycle,
                     cutoff_date = excluded.cutoff_date,
                     target_duration_min = excluded.target_duration_min,
@@ -464,6 +466,7 @@ class ProjectManager:
                     restored_record.name,
                     restored_record.slug,
                     restored_record.chapter_title,
+                    restored_record.content_category,
                     restored_record.exam_cycle,
                     restored_record.cutoff_date,
                     restored_record.target_duration_min,
