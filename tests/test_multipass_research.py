@@ -93,6 +93,11 @@ def test_multi_pass_research_claim_categorization_and_filtering(tmp_path: Path) 
     assert report.total_claims_extracted == 4
     assert report.verified_facts_count == 1
     assert report.safe_narration_claims[0].claim_id == supported_claim_id
+    interpretation_row = conn.execute(
+        "SELECT status FROM claims WHERE statement LIKE 'It could be argued%'"
+    ).fetchone()
+    assert interpretation_row["status"] == "HUMAN_REVIEW_REQUIRED"
+    assert all(claim.claim_id == supported_claim_id for claim in report.safe_narration_claims)
     assert report.interpretations_count >= 1
     assert report.insufficient_evidence_count >= 1
     assert report.outdated_claims_count >= 1
