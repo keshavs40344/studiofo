@@ -81,6 +81,22 @@ def test_teaching_engine_syllabus_preserving_expansion(tmp_path: Path) -> None:
     proj_dir = Path(proj.root_dir)
     engine = TeachingEngine(conn, proj_dir)
 
+
+    # Provide an explicit reviewer attestation so this test exercises teaching expansion.
+    evidence = EvidenceEngine(conn, proj_dir)
+    source_id = evidence.add_source(
+        proj.id, "Constitution of India", "Government of India", "PRIMARY_OFFICIAL"
+    )
+    claim_id = evidence.add_claim(
+        proj.id, "Directive Principles guide state policy.", "Directive Principles",
+        source_id=source_id, page_or_section="Part IV"
+    )
+    evidence.verify_claim_against_source(
+        claim_id, source_id, "Part IV",
+        "The provisions in Part IV are called the Directive Principles of State Policy.",
+        reviewer_id="teaching-expansion-reviewer",
+    )
+
     # When target duration >= 7 min, engine expands with Constituent Assembly debates and Judicial doctrines
     pkg = engine.generate_teaching_package(
         project_id=proj.id,
@@ -167,5 +183,8 @@ def test_youtube_publisher_safety_requires_approval(tmp_path: Path) -> None:
     mp4.write_bytes(b"data")
 
     # Public upload without explicit human approval is blocked
-    with pytest.raises(PermissionError, match="human_approved_by"):
-        yt.upload_video(mp4, {"video_title": "Test"}, qa_passed=True, privacy_status="public", human_approved_by=None)
+    blocked = yt.upload_video(
+        mp4, {"video_title": "Test"}, qa_passed=True,
+        privacy_status="public", human_approved_by=None,
+    )
+    assert blocked["status"] == "BLOCKED_AWAITING_EXPLICIT_USER_APPROVAL"
