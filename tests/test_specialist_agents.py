@@ -115,8 +115,8 @@ def test_claim_verifier_requires_human_attestation(tmp_path: Path) -> None:
     )
     verifier = get_specialist_agent("AGENT_05")
     result = verifier.run(context)
-    assert result.status == AgentStatus.COMPLETED
-    assert result.quality_status == QualityCheckStatus.REVIEW_REQUIRED
+    assert result.status == AgentStatus.FAILED
+    assert result.quality_status == QualityCheckStatus.INSUFFICIENT_EVIDENCE
     row = conn.execute("SELECT status FROM claims WHERE id = ?", (claim_id,)).fetchone()
     assert row["status"] == "HUMAN_REVIEW_REQUIRED"
 
