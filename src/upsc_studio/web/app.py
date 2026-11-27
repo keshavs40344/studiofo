@@ -153,7 +153,10 @@ async function openProject(id) {
   const st = document.getElementById('w-status');
   st.textContent = data.project.status;
   st.className = `badge ${data.project.status}`;
-  document.getElementById('qa-badges').innerHTML = (data.qa_gates || []).map(g =>
+  const tenGateRows = Object.entries((data.ten_gates || {}).gates || {})
+    .map(([gate_name, status]) => ({gate_name, status}));
+  const visibleGates = tenGateRows.length ? tenGateRows : (data.qa_gates || []);
+  document.getElementById('qa-badges').innerHTML = visibleGates.map(g =>
     `<span class="badge ${g.status}">${g.gate_name}: ${g.status}</span>`
   ).join('');
   const review = data.manual_review || {};
@@ -216,7 +219,8 @@ async function backupCurrent() {
 
 async function approveCurrent() {
   if (!currentProjectId) return;
-  const res = await fetch(`/api/projects/${currentProjectId}/approve`, { method: 'POST' });
+  const approver = encodeURIComponent(document.getElementById('reviewer-name').value || 'User');
+  const res = await fetch(`/api/projects/${currentProjectId}/approve?approver=${approver}`, { method: 'POST' });
   const data = await res.json();
   if (!res.ok) { alert('Cannot approve: ' + data.detail); return; }
   await openProject(currentProjectId);
@@ -290,9 +294,17 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                     "review_error": "Saved manual review is unreadable or its reviewed artifacts changed.",
                     "review_is_current": False,
                 }
+        ten_gate_path = Path(proj.root_dir) / "qa" / "final_10_gate_report.json"
+        ten_gates = {}
+        if ten_gate_path.is_file():
+            try:
+                ten_gates = json.loads(ten_gate_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                ten_gates = {"report_error": "Saved 10-gate report is unreadable."}
         return {
             "project": proj.model_dump(),
             "qa_gates": gates,
+            "ten_gates": ten_gates,
             "claims_count": claims_count,
             "manual_review": manual_review,
         }
