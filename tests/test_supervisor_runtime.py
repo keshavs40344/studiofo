@@ -54,7 +54,7 @@ def test_supervisor_persists_pipeline_and_reuses_it_when_only_publish_approval_c
         def __init__(self, _conn, _projects_root):
             pass
 
-        def run_pipeline(self, **kwargs):
+        def run_staged(self, **kwargs):
             pipeline_calls["count"] += 1
             return {
                 "status": "APPROVED",
@@ -89,7 +89,7 @@ def test_supervisor_persists_pipeline_and_reuses_it_when_only_publish_approval_c
                 "privacy_status": "private",
             }
 
-    monkeypatch.setattr(supervisor_module, "ChapterPipeline", FakePipeline)
+    monkeypatch.setattr(supervisor_module, "StagedChapterPipeline", FakePipeline)
     monkeypatch.setattr(supervisor_module, "YouTubePublisher", FakePublisher)
 
     producer = ExecutiveProducer(conn, projects_root)
@@ -150,11 +150,11 @@ def test_supervisor_does_not_retry_failed_non_idempotent_production(
         def __init__(self, _conn, _projects_root):
             pass
 
-        def run_pipeline(self, **kwargs):
+        def run_staged(self, **kwargs):
             calls["count"] += 1
             raise RuntimeError("injected permanent production failure")
 
-    monkeypatch.setattr(supervisor_module, "ChapterPipeline", FailingPipeline)
+    monkeypatch.setattr(supervisor_module, "StagedChapterPipeline", FailingPipeline)
     result = ExecutiveProducer(conn, projects_root).run_autonomous_factory(
         project.id, ai_narration=False
     )
