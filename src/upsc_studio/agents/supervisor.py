@@ -145,6 +145,29 @@ class ExecutiveProducer:
                 "error": task_res.errors,
             }
 
+        # A review/voice checkpoint is a valid paused pipeline state, not a crash.
+        # Never continue into storyboard/render packaging when those artifacts do not exist.
+        if pipe_out.get("status") != "APPROVED":
+            blocked_reason = f"Core pipeline paused at {pipe_out.get('status', 'UNKNOWN')}."
+            for aid, astate in agent_states.items():
+                if aid != "AGENT_01":
+                    astate.status = AgentStatus.BLOCKED
+                    astate.errors = [blocked_reason]
+            with event_log.open("a", encoding="utf-8") as f:
+                for astate in agent_states.values():
+                    f.write(astate.model_dump_json() + "\\n")
+            return {
+                **pipe_out,
+                "agents_registered": len(AGENT_REGISTRY),
+                "agent_states": {k: v.model_dump() for k, v in agent_states.items()},
+                "supervisor_task": task_res.model_dump(),
+                "editorial_and_shorts": None,
+                "youtube_publish": {
+                    "status": "BLOCKED_UNTIL_CORE_PIPELINE_APPROVED",
+                    "upload_attempted": False,
+                },
+            }
+
         render_manifest = pipe_out.get("render_manifest") or {}
         render_path = render_manifest.get("final_video")
 
