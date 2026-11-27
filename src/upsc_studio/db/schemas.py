@@ -116,6 +116,10 @@ class SceneSpec(BaseModel):
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+class DubLanguageRequest(BaseModel):
+    target_language: Literal["en", "hi", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "or"]
+
+
 class ResearchDiscoveryRequest(BaseModel):
     query: str = Field(..., min_length=4, max_length=300)
     limit: int = Field(default=8, ge=1, le=10)
