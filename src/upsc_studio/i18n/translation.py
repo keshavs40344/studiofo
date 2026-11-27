@@ -86,18 +86,21 @@ class TranslationService:
                 "setup": "Start a local LibreTranslate server or install Argos Translate and the required language models.",
             }
 
-    def _translate_one(self, text: str, target_language: str) -> tuple[str, str]:
+    def _translate_one(\n        self, text: str, target_language: str, provider: str | None = None\n    ) -> tuple[str, str]:
         target = target_language.lower()
         if target not in LANGUAGE_LABELS:
             raise ValueError(f"Unsupported target language code: {target_language}")
         if not text.strip():
             return text, "NONE"
 
-        caps = self.capabilities()
-        if not caps["available"]:
-            raise TranslationUnavailable(caps["setup"])
+        selected_provider = provider
+        if selected_provider is None:
+            caps = self.capabilities()
+            if not caps["available"]:
+                raise TranslationUnavailable(caps["setup"])
+            selected_provider = caps["provider"]
 
-        if caps["provider"] == "LIBRETRANSLATE":
+        if selected_provider == "LIBRETRANSLATE":
             payload: dict[str, str] = {
                 "q": text,
                 "source": "auto",
@@ -130,14 +133,13 @@ class TranslationService:
 
     def translate_segments(self, texts: list[str], target_language: str) -> dict[str, Any]:
         translated: list[str] = []
-        provider: str | None = None
+        caps = self.capabilities()
+        if not caps["available"]:
+            raise TranslationUnavailable(caps["setup"])
+        provider = str(caps["provider"])
         for text in texts:
-            result, used_provider = self._translate_one(text, target_language)
+            result, _ = self._translate_one(text, target_language, provider=provider)
             translated.append(result)
-            if used_provider != "NONE":
-                provider = used_provider
-        if provider is None:
-            provider = str(self.capabilities().get("provider") or "NONE")
         return {
             "target_language": target_language.lower(),
             "target_language_label": LANGUAGE_LABELS.get(target_language.lower(), target_language),
