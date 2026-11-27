@@ -185,9 +185,9 @@ class EvidenceEngine:
 
         excerpt = evidence_excerpt.strip()
         notes = (
-            f"HUMAN_ATTESTED_BY:{reviewer_id.strip()}\\n"
-            f"Source: {src_row['title']} ({src_row['source_tier']})\\n"
-            f"Page or section: {page_or_section.strip()}\\n"
+            f"HUMAN_ATTESTED_BY:{reviewer_id.strip()}\n"
+            f"Source: {src_row['title']} ({src_row['source_tier']})\n"
+            f"Page or section: {page_or_section.strip()}\n"
             f"Evidence excerpt: {excerpt}"
         )
         self.conn.execute(
