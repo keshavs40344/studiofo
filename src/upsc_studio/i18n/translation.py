@@ -139,6 +139,15 @@ class TranslationService:
         if not caps["available"]:
             raise TranslationUnavailable(caps["setup"])
         provider = str(caps["provider"])
+        supported_codes = {
+            str(item.get("code", "")).lower()
+            for item in caps.get("supported_languages", [])
+            if isinstance(item, dict)
+        }
+        if target_language.lower() not in supported_codes:
+            raise TranslationUnavailable(
+                f"The configured {provider} provider does not report support for {target_language}."
+            )
         for text in texts:
             result, _ = self._translate_one(text, target_language, provider=provider)
             translated.append(result)
