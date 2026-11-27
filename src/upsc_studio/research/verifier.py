@@ -293,7 +293,7 @@ class EvidenceEngine:
                 c["status"] = VerificationStatus.HUMAN_REVIEW_REQUIRED.value
                 c["verification_notes"] = (
                     (c.get("verification_notes") or "")
-                    + "\\nExport gate: VERIFIED status downgraded because no human attestation excerpt is recorded."
+                    + "\nExport gate: VERIFIED status downgraded because no human attestation excerpt is recorded."
                 )
                 self.conn.execute(
                     "UPDATE claims SET status = ?, verification_notes = ? WHERE id = ?",
