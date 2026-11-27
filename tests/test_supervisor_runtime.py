@@ -68,7 +68,9 @@ def test_supervisor_persists_pipeline_and_reuses_it_when_only_publish_approval_c
                     "rights": {"status": "PASSED"},
                     "media": {"status": "PASSED"},
                 },
-                "ten_gates": {"failed_gates": []},
+                "ten_gates": {
+                    "all_gates_passed": True, "failed_gates": [], "pending_gates": []
+                },
                 "recording_script": None,
                 "scenes_count": 1,
             }
