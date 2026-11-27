@@ -43,7 +43,7 @@ from upsc_studio.video.renderer import VideoRenderer
 from upsc_studio.video.shorts import ShortsRenderer
 
 
-PIPELINE_STAGE_VERSION = "chapter-stages-v1"
+PIPELINE_STAGE_VERSION = "chapter-stages-v2"
 
 
 def _fingerprint(value: Any) -> str:
@@ -582,10 +582,42 @@ class StagedChapterPipeline:
             audio = tts.synthesize_scenes(project_id, scenes)
             narration = Path(audio["narration_full_wav"])
             subtitle_path = Path(audio["narration_transcript_srt"])
+        actual_duration = float(audio.get("duration_sec") or 0.0)
+        estimated_total = sum(max(0.0, scene.estimated_duration_sec) for scene in scenes)
+        if actual_duration <= 0 or estimated_total <= 0:
+            raise RuntimeError("Voice stage produced an invalid narration duration.")
+        scale = actual_duration / estimated_total
+        elapsed = 0.0
+        for scene in scenes[:-1]:
+            scene.estimated_duration_sec = max(
+                0.001, round(scene.estimated_duration_sec * scale, 3)
+            )
+            elapsed += scene.estimated_duration_sec
+        # Correct rounding drift on the last scene so the scene timeline ends at
+        # the actual narration end, not at the estimated script duration.
+        if scenes:
+            final_duration = round(actual_duration - elapsed, 3)
+            if final_duration <= 0:
+                raise RuntimeError("Narration is too short to align all storyboard scenes.")
+            scenes[-1].estimated_duration_sec = final_duration
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        _write_json(
+            storyboard_path,
+            [scene.model_dump(mode="json") for scene in scenes],
+        )
         report = {
-            "pipeline_status": "VOICE_READY", "audio_report": audio,
-            "narration_wav": str(narration), "subtitles_srt": str(subtitle_path),
+            "pipeline_status": "VOICE_READY",
+            "audio_report": audio,
+            "narration_wav": str(narration),
+            "subtitles_srt": str(subtitle_path),
             "voice_capabilities": capabilities,
+            "timeline_alignment": {
+                "audio_duration_sec": actual_duration,
+                "scene_timeline_duration_sec": round(
+                    sum(scene.estimated_duration_sec for scene in scenes), 3
+                ),
+                "method": "SCENE_DURATION_SCALED_TO_ACTUAL_NARRATION",
+            },
         }
         _write_json(paths["voice"], report)
         return {"status": "COMPLETED", "artifact": str(paths["voice"]),
