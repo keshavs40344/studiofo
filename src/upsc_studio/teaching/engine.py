@@ -42,8 +42,15 @@ class TeachingEngine:
                 "SELECT * FROM claims WHERE project_id = ? ORDER BY id", (project_id,)
             ).fetchall()
         ]
-        verified_claims = [c for c in claims if c["status"] == VerificationStatus.VERIFIED.value]
-        blocked_claims = [c for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
+        verified_claims = [
+            c for c in claims
+            if c["status"] == VerificationStatus.VERIFIED.value
+            and (c["verification_notes"] or "").startswith("HUMAN_ATTESTED_BY:")
+            and "Evidence excerpt:" in (c["verification_notes"] or "")
+            and len((c["verification_notes"] or "").split("Evidence excerpt:", 1)[1].strip()) >= 10
+        ]
+        verified_ids = {c["id"] for c in verified_claims}
+        blocked_claims = [c for c in claims if c["id"] not in verified_ids]
         if not verified_claims:
             raise ValueError(
                 "Teaching script generation is blocked: no claims have explicit human evidence attestation."
