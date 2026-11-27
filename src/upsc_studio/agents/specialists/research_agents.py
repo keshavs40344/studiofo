@@ -330,10 +330,11 @@ class ClaimToSourceVerifierAgent(BaseSpecialistAgent):
         q_status = (
             QualityCheckStatus.PASSED
             if review_count == 0 and unsupported_count == 0
-            else QualityCheckStatus.REVIEW_REQUIRED
+            else (QualityCheckStatus.REVIEW_REQUIRED if verified_count > 0 else QualityCheckStatus.INSUFFICIENT_EVIDENCE)
         )
+        task_status = AgentStatus.COMPLETED if verified_count > 0 else AgentStatus.FAILED
         return AgentExecutionResult(
-            agent_id=self.agent_id, agent_role=self.role, status=AgentStatus.COMPLETED,
+            agent_id=self.agent_id, agent_role=self.role, status=task_status,
             quality_status=q_status,
             outputs={
                 "verified_claims": verified_count,
