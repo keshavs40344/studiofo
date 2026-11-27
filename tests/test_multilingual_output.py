@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 
 from upsc_studio.db.schemas import SceneSpec
 from upsc_studio.tts.adapter import PiperTTSEngine
-from upsc_studio.web import app as web_module
+import upsc_studio.web.app as web_module
 from upsc_studio.web.app import create_app
 
 
@@ -77,7 +77,9 @@ def test_piper_model_inventory_requires_explicit_commercial_license_metadata(tmp
     assert inventory[0]["usable_for_dubbing"] is True
 
     (model_dir / "voice_licenses.json").write_text("{}", encoding="utf-8")
-    assert PiperTTSEngine(tmp_path).discover_piper_models() == []
+    unlicensed_engine = PiperTTSEngine(tmp_path)
+    unlicensed_engine.model_path = model
+    assert unlicensed_engine.discover_piper_models()[0]["usable_for_dubbing"] is False
 
 
 def test_dashboard_translation_produces_script_and_subtitles_when_voice_model_is_absent(
