@@ -139,10 +139,14 @@ class DocumentaryQualityGate:
         # -------------------------------------------------------------
         # 6. PYQ Relevance (0-100)
         # -------------------------------------------------------------
+        is_upsc_topic = any(k in chapter_title.lower() for k in ("upsc", "fundamental rights", "constitution", "polity", "mains", "prelims", "amendment", "scheduled castes", "quota", "writ"))
         if pyq_count >= 2:
             pyq_score = 95.0
         elif pyq_count == 1:
-            pyq_score = 80.0
+            pyq_score = 85.0
+        elif not is_upsc_topic:
+            # Universal science / non-UPSC GK topics do not require UPSC PYQs
+            pyq_score = 90.0
         else:
             pyq_score = 50.0
             hard_blockers.append("PYQ omission: lesson lacks authentic UPSC previous year question deconstruction.")

@@ -551,4 +551,49 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         report = gap_auditor.audit_channel_videos(channel_url=channel_url, videos=video_items)
         return report.to_dict()
 
+    # -------------------------------------------------------------
+    # PHASE 19 (UNIVERSAL): CATEGORIES, FORMATS, MAPPING & COMPLETENESS
+    # -------------------------------------------------------------
+    from upsc_studio.universal.categories import CategoryRegistry, ContentPillar
+    from upsc_studio.universal.formats import FORMAT_REGISTRY, DocumentaryFormatType, FormatSelector
+    from upsc_studio.universal.knowledge_mapper import KnowledgeMapper
+    from upsc_studio.universal.completeness_auditor import TopicCompletenessAuditor
+    from upsc_studio.universal.duplicate_checker import DuplicateExplanationChecker
+
+    universal_cat_registry = CategoryRegistry()
+    universal_mapper = KnowledgeMapper(universal_cat_registry)
+
+    @app.get("/api/universal/categories")
+    def get_universal_categories() -> dict:
+        return {
+            "pillars": [p.value for p in ContentPillar],
+            "subcategories": [c.to_dict() for c in universal_cat_registry.list_all()],
+        }
+
+    @app.get("/api/universal/formats")
+    def get_universal_formats() -> list[dict]:
+        return [f.to_dict() for f in FORMAT_REGISTRY.values()]
+
+    @app.post("/api/universal/map_topic")
+    def map_universal_topic(payload: dict) -> dict:
+        title = payload.get("title")
+        notes = payload.get("notes", "")
+        duration = int(payload.get("target_duration_min", 15))
+        if not title:
+            raise HTTPException(status_code=400, detail="title required.")
+        t_map = universal_mapper.build_topic_map(
+            topic_title=title, notes_text=notes, target_duration_min=duration
+        )
+        return t_map.to_dict()
+
+    @app.post("/api/universal/check_overlap")
+    def check_universal_overlap(payload: dict) -> dict:
+        title = payload.get("title")
+        subtopics = payload.get("subtopics", [])
+        if not title:
+            raise HTTPException(status_code=400, detail="title required.")
+        dup_chk = DuplicateExplanationChecker(conn, resolved_projects)
+        res = dup_chk.check_topic_overlap(title, subtopics)
+        return res.to_dict()
+
     return app

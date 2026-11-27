@@ -100,6 +100,24 @@ ENGLISH_TECHNICAL_TERMS_PHONETIC: dict[str, str] = {
     "Mains": "मेंस",
     "PYQ": "पीवाईक्यू",
     "PYQs": "पीवाईक्यूज़",
+    "Neuron": "न्यूरॉन",
+    "Neurons": "न्यूरॉन्स",
+    "Action Potential": "एक्शन पोटेंशियल",
+    "Synapse": "सिनेप्स",
+    "Synaptic": "सिनेप्टिक",
+    "Synaptic Cleft": "सिनेप्टिक क्लेफ्ट",
+    "Neurotransmitter": "न्यूरोट्रांसमीटर",
+    "Neurotransmitters": "न्यूरोट्रांसमीटर्स",
+    "Glutamate": "ग्लूटामेट",
+    "GABA": "गाबा",
+    "Thalamus": "थैलेमस",
+    "Hippocampus": "हिप्पोकैम्पस",
+    "Cortex": "कोर्टेक्स",
+    "Sub-classification": "सब-क्लासिफिकेशन",
+    "Scheduled Castes": "शिड्यूल्ड कास्ट्स",
+    "Constitution Bench": "कॉन्स्टिट्यूशन बेंच",
+    "Affirmative Action": "अफर्मेटिव एक्शन",
+    "Creamy Layer": "क्रीमी लेयर",
 }
 
 
@@ -155,6 +173,20 @@ class HinglishDirector:
         verified_claims: Optional[list[dict[str, Any]]] = None,
     ) -> list[HinglishSection]:
         """Construct all 13 educational dimensions in authentic natural Hinglish."""
+        t_lower = chapter_title.lower()
+        if "brain" in t_lower or "neuro" in t_lower:
+            return self._build_brain_neuroscience_sections(chapter_title, target_duration_min, verified_claims)
+        elif "current" in t_lower or "verdict" in t_lower or "bench" in t_lower or "scheduled castes" in t_lower or "sub-classification" in t_lower:
+            return self._build_current_affairs_sections(chapter_title, target_duration_min, verified_claims)
+        else:
+            return self._build_polity_sections(chapter_title, target_duration_min, verified_claims)
+
+    def _build_polity_sections(
+        self,
+        chapter_title: str,
+        target_duration_min: int = 15,
+        verified_claims: Optional[list[dict[str, Any]]] = None,
+    ) -> list[HinglishSection]:
         verified_claims = verified_claims or []
         evidence_text = (
             verified_claims[0]["statement"]
@@ -524,6 +556,615 @@ class HinglishDirector:
             s13,
             "13.3",
             "अगले lesson में हम Directive Principles of State Policy और उनके Fundamental Rights के साथ सम्बंध को decode करेंगे। धन्यवाद।",
+            "CONCLUSION_AND_RECAP",
+        )
+        sections.append(s13)
+        return sections
+
+    def _build_brain_neuroscience_sections(
+        self,
+        chapter_title: str,
+        target_duration_min: int = 15,
+        verified_claims: Optional[list[dict[str, Any]]] = None,
+    ) -> list[HinglishSection]:
+        sections: list[HinglishSection] = []
+
+        # 1. OPENING_HOOK
+        s1 = HinglishSection(
+            section_id="SEC_01_HOOK",
+            title="Opening Hook: How 86 Billion Neurons Create Reality",
+            dimension_tag="OPENING_HOOK",
+            objective="Engage audience on how biological cells convert physical energy into conscious thought.",
+            visual_category="Cinematic Motion Graphics / Neural Universe",
+        )
+        self._add_sentence(
+            s1, "1.1",
+            "कल्पना कीजिए कि आपके सिर के भीतर एक 1.4 किलोग्राम का जैविक सुपरकंप्यूटर है, जिसमें 86 billion neurons लगातार काम कर रहे हैं।",
+            "OPENING_HOOK",
+        )
+        self._add_sentence(
+            s1, "1.2",
+            "बाहरी दुनिया से आने वाली रोशनी, आवाज़ और तापमान को यह दिमाग कैसे electrical signals और conscious thoughts में बदलता है?",
+            "OPENING_HOOK",
+        )
+        self._add_sentence(
+            s1, "1.3",
+            f"आज के documentary explainer में हम '{chapter_title}' को मॉलिक्यूलर लेवल से लेकर cognitive perception तक विस्तार से समझेंगे।",
+            "OPENING_HOOK",
+        )
+        sections.append(s1)
+
+        # 2. CONTEXT_AND_IMPORTANCE
+        s2 = HinglishSection(
+            section_id="SEC_02_CONTEXT",
+            title="Scientific Importance: The Foundation of Neuroscience & AI",
+            dimension_tag="CONTEXT_AND_IMPORTANCE",
+            objective="Explain why neural processing is critical for modern medicine, computing, and UPSC Science & Tech.",
+            visual_category="Scientific Scope / Tech Overlay",
+        )
+        self._add_sentence(
+            s2, "2.1",
+            "Brain information processing को समझना केवल जीव विज्ञान का विषय नहीं है, बल्कि यह modern Artificial Intelligence और Brain-Computer Interfaces का आधार है।",
+            "CONTEXT_AND_IMPORTANCE",
+        )
+        self._add_sentence(
+            s2, "2.2",
+            "UPSC Science and Technology में neuromorphic computing, neural networks और neurodegenerative disorders पर अक्सर विश्लेषणात्मक प्रश्न पूछे जाते हैं।",
+            "CONTEXT_AND_IMPORTANCE",
+        )
+        sections.append(s2)
+
+        # 3. HISTORICAL_GENESIS
+        s3 = HinglishSection(
+            section_id="SEC_03_HISTORY",
+            title="Historical Evolution: From Reticular Theory to Neuron Doctrine",
+            dimension_tag="HISTORICAL_GENESIS",
+            objective="Trace how Ramón y Cajal, Hodgkin, Huxley, Bliss and Lømo decoded the brain.",
+            visual_category="Historical Archive / Microscope Graphics",
+        )
+        self._add_sentence(
+            s3, "3.1",
+            "उन्नीसवीं सदी के अंत में Santiago Ramón y Cajal ने सिद्ध किया कि मस्तिष्क एक निरंतर जाल नहीं है, बल्कि व्यक्तिगत कोशिकाओं यानी neurons से बना है।",
+            "HISTORICAL_GENESIS",
+        )
+        self._add_sentence(
+            s3, "3.2",
+            "1952 में Hodgkin and Huxley ने action potential का गणितीय मॉडल प्रस्तुत किया, जिसके लिए उन्हें नोबेल पुरस्कार मिला।",
+            "HISTORICAL_GENESIS",
+        )
+        self._add_sentence(
+            s3, "3.3",
+            "1973 में Bliss and Lømo ने हिप्पोकैम्पस में Long-Term Potentiation की खोज की, जिसने साबित किया कि सीखने से synapses भौतिक रूप से बदलते हैं।",
+            "HISTORICAL_GENESIS",
+        )
+        sections.append(s3)
+
+        # 4. FOUNDATIONAL_DEFINITIONS (Neuron Structure & Resting Potential)
+        s4 = HinglishSection(
+            section_id="SEC_04_DEFINITIONS",
+            title="Neuron Structure & Resting Potential: The Electrical Battery",
+            dimension_tag="FOUNDATIONAL_DEFINITIONS",
+            objective="Explain structure of soma, axon, dendrites and -70mV resting potential maintained by Na+/K+ ATPase pump.",
+            visual_category="3D Molecular Cell / Ion Channel Animation",
+        )
+        self._add_sentence(
+            s4, "4.1",
+            "A neuron is defined as the fundamental functional unit of the nervous system, comprising soma, branching dendrites, and an axon.",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        self._add_sentence(
+            s4, "4.2",
+            "प्रत्येक neuron आराम की स्थिति में एक biological battery की तरह काम करता है, जिसका resting potential -70 millivolts होता है।",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        self._add_sentence(
+            s4, "4.3",
+            "This electrical gradient is maintained because the sodium-potassium ATPase pump actively pumps three sodium ions out for every two potassium ions pumped in.",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        sections.append(s4)
+
+        # 5. OPERATIONAL_MECHANISM (Action Potential & Saltatory Conduction)
+        s5 = HinglishSection(
+            section_id="SEC_05_MECHANISM",
+            title="Action Potential & Saltatory Conduction: The Digital Pulse",
+            dimension_tag="OPERATIONAL_MECHANISM",
+            objective="Deconstruct depolarization, repolarization, and jumping across Nodes of Ranvier.",
+            visual_category="Oscilloscope Waveform / Axon Myelin Animation",
+        )
+        self._add_sentence(
+            s5, "5.1",
+            "How it works: जब dendrites पर पर्याप्त उत्तेजना मिलती है, तो membrane potential -55mV threshold पार कर जाता है, जिससे voltage-gated Na+ channels खुल जाते हैं।",
+            "OPERATIONAL_MECHANISM",
+        )
+        self._add_sentence(
+            s5, "5.2",
+            "Depolarization triggers an electrochemical action potential that rapidly spikes to +30 millivolts before repolarizing.",
+            "OPERATIONAL_MECHANISM",
+        )
+        self._add_sentence(
+            s5, "5.3",
+            "In myelinated axons, this electrical impulse jumps across Nodes of Ranvier as a process of saltatory conduction, reaching speeds of 120 meters per second.",
+            "OPERATIONAL_MECHANISM",
+        )
+        sections.append(s5)
+
+        # 6. REAL_WORLD_APPLICATIONS (Synaptic Transmission & Neurotransmitters)
+        s6 = HinglishSection(
+            section_id="SEC_06_APPLICATIONS",
+            title="Synaptic Transmission: Chemical Messaging Across the 20nm Gap",
+            dimension_tag="REAL_WORLD_APPLICATIONS",
+            objective="Explain vesicle exocytosis, calcium influx, 20nm synaptic cleft, and Glutamate vs GABA.",
+            visual_category="Microscopic Synapse / Molecular Exocytosis",
+        )
+        self._add_sentence(
+            s6, "6.1",
+            "When the action potential reaches the axon terminal, voltage-gated calcium channels open, triggering neurotransmitter vesicle exocytosis across the 20nm synaptic cleft.",
+            "REAL_WORLD_APPLICATIONS",
+        )
+        self._add_sentence(
+            s6, "6.2",
+            "For example, Glutamate acts as the primary excitatory neurotransmitter, while GABA provides essential inhibition to prevent runaway neural firing.",
+            "REAL_WORLD_APPLICATIONS",
+        )
+        self._add_sentence(
+            s6, "6.3",
+            "These chemical messengers bind to postsynaptic ligand-gated ion channels, converting chemical diffusion back into electrical membrane potentials.",
+            "REAL_WORLD_APPLICATIONS",
+        )
+        sections.append(s6)
+
+        # 7. CONSTITUTIONAL_PROVISIONS (Thalamocortical Relay & Predictive Perception)
+        s7 = HinglishSection(
+            section_id="SEC_07_PROVISIONS",
+            title="Thalamocortical Relay & Predictive Processing: The Brain as an Inference Engine",
+            dimension_tag="CONSTITUTIONAL_PROVISIONS",
+            objective="Examine how the thalamus routes sensory inputs to cortex and operates as a Bayesian predictive machine.",
+            visual_category="Brain Functional Anatomy / Thalamus Hub",
+        )
+        self._add_sentence(
+            s7, "7.1",
+            "All sensory inputs except smell pass through the thalamus, which routes signals to specialized areas in the primary sensory cortex.",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        self._add_sentence(
+            s7, "7.2",
+            "Modern cognitive neuroscience demonstrates that the brain is not a passive sensory receiver, but operates as a Bayesian predictive machine.",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        self._add_sentence(
+            s7, "7.3",
+            "Top-down predictions from the cortex meet bottom-up sensory signals, updating perception by continuously calculating prediction errors.",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        sections.append(s7)
+
+        # 8. LANDMARK_JUDGMENTS (Memory Consolidation & Synaptic Plasticity)
+        s8 = HinglishSection(
+            section_id="SEC_08_PRECEDENTS",
+            title="Memory Consolidation & Synaptic Plasticity: Long-Term Potentiation",
+            dimension_tag="LANDMARK_JUDGMENTS",
+            objective="Detail NMDA receptor activation, calcium cascade, and hippocampal memory storage.",
+            visual_category="Dendritic Spine Growth / Hebbian Wiring",
+        )
+        self._add_sentence(
+            s8, "8.1",
+            "Learning and memory rely on Hebbian plasticity: 'cells that fire together, wire together'.",
+            "LANDMARK_JUDGMENTS",
+        )
+        self._add_sentence(
+            s8, "8.2",
+            "At the molecular level, repetitive high-frequency stimulation expels magnesium ions from NMDA receptors, initiating a calcium cascade results in Long-Term Potentiation (LTP).",
+            "LANDMARK_JUDGMENTS",
+        )
+        self._add_sentence(
+            s8, "8.3",
+            "Short-term working representations in the hippocampus are gradually consolidated into permanent distributed networks across the cerebral cortex during slow-wave sleep.",
+            "LANDMARK_JUDGMENTS",
+        )
+        sections.append(s8)
+
+        # 9. DEBATES_AND_CRITICISMS
+        s9 = HinglishSection(
+            section_id="SEC_09_DEBATES",
+            title="Scientific Debates: Localist vs Distributed & The Hard Problem",
+            dimension_tag="DEBATES_AND_CRITICISMS",
+            objective="Address current unresolved frontiers in neuroscience.",
+            visual_category="Philosophical Dichotomy / Neural Map Debate",
+        )
+        self._add_sentence(
+            s9, "9.1",
+            "One major scientific challenge and limitation is whether individual concepts are represented by single neurons or distributed across millions of synapses.",
+            "DEBATES_AND_CRITICISMS",
+        )
+        self._add_sentence(
+            s9, "9.2",
+            "Furthermore, philosopher David Chalmers formulated the Hard Problem of Consciousness: how objective electrochemical signals generate subjective qualitative feelings.",
+            "DEBATES_AND_CRITICISMS",
+        )
+        sections.append(s9)
+
+        # 10. PRELIMS_RELEVANCE (Key Biological Constants & Definitions)
+        s10 = HinglishSection(
+            section_id="SEC_10_PRELIMS",
+            title="High-Yield Examination Facts: Membrane Potentials & Cell Biology",
+            dimension_tag="PRELIMS_RELEVANCE",
+            objective="Consolidate high-yield factual checkpoints.",
+            visual_category="Fact Card / Precision Metrics Grid",
+        )
+        self._add_sentence(
+            s10, "10.1",
+            "Remember key factual parameters: resting potential is -70mV, threshold is -55mV, and the peak of action potential reaches +30mV.",
+            "PRELIMS_RELEVANCE",
+        )
+        self._add_sentence(
+            s10, "10.2",
+            "Glutamate is excitatory while GABA is inhibitory; myelin is produced by oligodendrocytes in the CNS and Schwann cells in the PNS.",
+            "PRELIMS_RELEVANCE",
+        )
+        sections.append(s10)
+
+        # 11. MAINS_DIMENSIONS (Biomedical & AI Applications)
+        s11 = HinglishSection(
+            section_id="SEC_11_MAINS",
+            title="Multidimensional Impacts: Neuromorphic Chips & Neuroethics",
+            dimension_tag="MAINS_DIMENSIONS",
+            objective="Analyze technological, ethical, and clinical dimensions.",
+            visual_category="Analytical Matrix / Tech Policy Flow",
+        )
+        self._add_sentence(
+            s11, "11.1",
+            "Biomimetic computing projects like neuromorphic chips mimic spike timing dependent plasticity to achieve artificial intelligence with low energy consumption.",
+            "MAINS_DIMENSIONS",
+        )
+        self._add_sentence(
+            s11, "11.2",
+            "Neuroethics has emerged as a vital governance domain, regulating neural data privacy, cognitive enhancement, and neural prosthetics.",
+            "MAINS_DIMENSIONS",
+        )
+        sections.append(s11)
+
+        # 12. AUTHENTIC_PYQS (Debunking Neurological Myths & Modern BCI)
+        s12 = HinglishSection(
+            section_id="SEC_12_PYQS",
+            title="Debunking Neurological Myths & Modern Brain-Computer Interfaces",
+            dimension_tag="AUTHENTIC_PYQS",
+            objective="Dispel popular misconceptions and connect to modern BCI technology.",
+            visual_category="Myth vs Reality / BCI Concept Split-Screen",
+        )
+        self._add_sentence(
+            s12, "12.1",
+            "First, debunking neurological myths: the popular claim that humans only use 10 percent of their brain is completely false; functional neuroimaging proves entire brain activation.",
+            "AUTHENTIC_PYQS",
+        )
+        self._add_sentence(
+            s12, "12.2",
+            "Similarly, the hemisphere dichotomy claiming logical left versus creative right is refuted; complex cognition requires bilateral integration.",
+            "AUTHENTIC_PYQS",
+        )
+        self._add_sentence(
+            s12, "12.3",
+            "Modern Brain-Computer Interfaces (BCI) directly decode motor cortex electrical spikes, allowing paralyzed patients to control robotic limbs and digital interfaces.",
+            "AUTHENTIC_PYQS",
+        )
+        sections.append(s12)
+
+        # 13. CONCLUSION_AND_RECAP
+        s13 = HinglishSection(
+            section_id="SEC_13_RECAP",
+            title="Summary & Conceptual Synthesis of Neural Processing",
+            dimension_tag="CONCLUSION_AND_RECAP",
+            objective="Recap the progression from ion channels to thought.",
+            visual_category="Summary Reel / Concept Network Synthesis",
+        )
+        self._add_sentence(
+            s13, "13.1",
+            f"आज हमने '{chapter_title}' में Resting Potential, Action Potential, Synaptic Transmission, और Predictive Processing के पूरे चक्र को समझा।",
+            "CONCLUSION_AND_RECAP",
+        )
+        self._add_sentence(
+            s13, "13.2",
+            "यह अद्भुत biological network ही हमारी स्मृति, चेतना और निर्णय लेने की क्षमता का मूल स्रोत है। धन्यवाद।",
+            "CONCLUSION_AND_RECAP",
+        )
+        sections.append(s13)
+
+        return sections
+
+    def _build_current_affairs_sections(
+        self,
+        chapter_title: str,
+        target_duration_min: int = 15,
+        verified_claims: Optional[list[dict[str, Any]]] = None,
+    ) -> list[HinglishSection]:
+        sections: list[HinglishSection] = []
+
+        # 1. OPENING_HOOK
+        s1 = HinglishSection(
+            section_id="SEC_01_HOOK",
+            title="Opening Hook: The 7-Judge Benchmark on Affirmative Action",
+            dimension_tag="OPENING_HOOK",
+            objective="Capture attention with the historic Supreme Court Constitution Bench ruling.",
+            visual_category="Supreme Court Architecture / Historic Gavel Animation",
+        )
+        self._add_sentence(
+            s1, "1.1",
+            "1 अगस्त 2024 को सुप्रीम कोर्ट की 7-जजों की Constitution Bench ने आरक्षण के इतिहास का सबसे बड़ा फैसला सुनाया।",
+            "OPENING_HOOK",
+        )
+        self._add_sentence(
+            s1, "1.2",
+            "प्रश्न यह था कि क्या राज्य सरकारें Scheduled Castes के भीतर सबसे पिछड़े वर्गों के लिए अलग से कोटा निर्धारित कर सकती हैं?",
+            "OPENING_HOOK",
+        )
+        self._add_sentence(
+            s1, "1.3",
+            f"आज हम '{chapter_title}' का संपूर्ण कानूनी विश्लेषण करेंगे — 6:1 के बहुमत निर्णय, संवैधानिक प्रावधानों और सामाजिक प्रभावों के साथ।",
+            "OPENING_HOOK",
+        )
+        sections.append(s1)
+
+        # 2. CONTEXT_AND_IMPORTANCE
+        s2 = HinglishSection(
+            section_id="SEC_02_CONTEXT",
+            title="Constitutional Importance: Balancing Equality & Representation",
+            dimension_tag="CONTEXT_AND_IMPORTANCE",
+            objective="Explain the significance for UPSC GS-II Polity and Social Justice.",
+            visual_category="Syllabus Anchor / Judicial Bench Heatmap",
+        )
+        self._add_sentence(
+            s2, "2.1",
+            "UPSC Mains GS Paper II में Reservation Jurisprudence, Substantive Equality और Federal Powers पर यह सीधा प्रासंगिक विषय है।",
+            "CONTEXT_AND_IMPORTANCE",
+        )
+        self._add_sentence(
+            s2, "2.2",
+            "इस निर्णय ने बीस साल पुराने E.V. Chinnaiah निर्णय को पलटकर affirmative action के नए युग की शुरुआत की है।",
+            "CONTEXT_AND_IMPORTANCE",
+        )
+        sections.append(s2)
+
+        # 3. HISTORICAL_GENESIS
+        s3 = HinglishSection(
+            section_id="SEC_03_HISTORY",
+            title="Historical Evolution: From E.V. Chinnaiah (2005) to 2024",
+            dimension_tag="HISTORICAL_GENESIS",
+            objective="Trace the legal conflict between 2005 5-judge bench and the 2024 7-judge bench.",
+            visual_category="Timeline Archive / Precedent Comparison",
+        )
+        self._add_sentence(
+            s3, "3.1",
+            "2005 में E.V. Chinnaiah v. State of Andhra Pradesh मामले में पांच जजों की बेंच ने फैसला दिया था कि Scheduled Castes एक एकल, समरूप समूह है।",
+            "HISTORICAL_GENESIS",
+        )
+        self._add_sentence(
+            s3, "3.2",
+            "उस समय सुप्रीम कोर्ट ने कहा था कि राज्यों के पास Article 341 की Presidential List के भीतर उप-वर्गीकरण करने की कोई शक्ति नहीं है।",
+            "HISTORICAL_GENESIS",
+        )
+        self._add_sentence(
+            s3, "3.3",
+            "लेकिन पंजाब, हरियाणा और अन्य राज्यों में सबसे वंचित जातियों जैसे वाल्मीकि और मज़हबी सिखों को उचित प्रतिनिधित्व न मिलने पर यह मामला 7 जजों की संविधान पीठ को भेजा गया।",
+            "HISTORICAL_GENESIS",
+        )
+        sections.append(s3)
+
+        # 4. FOUNDATIONAL_DEFINITIONS (Sub-classification Meaning & Principle)
+        s4 = HinglishSection(
+            section_id="SEC_04_DEFINITIONS",
+            title="Core Legal Definition: Sub-classification & Substantive Equality",
+            dimension_tag="FOUNDATIONAL_DEFINITIONS",
+            objective="Define sub-classification as identifying unequal groups within an overarching constitutional class.",
+            visual_category="Concept Diagram / Equality Spectrum Split-Screen",
+        )
+        self._add_sentence(
+            s4, "4.1",
+            "Sub-classification is defined as the identification of more backward sub-groups within a reserved category to ensure equitable benefit distribution.",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        self._add_sentence(
+            s4, "4.2",
+            "Chief Justice D.Y. Chandrachud की अध्यक्षता वाली पीठ ने माना कि Scheduled Castes कोई homogeneous, monolithic group नहीं हैं।",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        self._add_sentence(
+            s4, "4.3",
+            "सच्ची समानता यानी substantive equality का अर्थ है कि असमान लोगों के साथ समान व्यवहार करना भी असमानता पैदा करता है।",
+            "FOUNDATIONAL_DEFINITIONS",
+        )
+        sections.append(s4)
+
+        # 5. OPERATIONAL_MECHANISM (Article 15(4), 16(4) vs Article 341)
+        s5 = HinglishSection(
+            section_id="SEC_05_MECHANISM",
+            title="Constitutional Mechanism: Interplay Between Article 341 & Article 16(4)",
+            dimension_tag="OPERATIONAL_MECHANISM",
+            objective="Deconstruct the legal mechanism reconciling Article 341 Presidential identification and State quota powers.",
+            visual_category="Flowchart Animation / Constitutional Harmonization Matrix",
+        )
+        self._add_sentence(
+            s5, "5.1",
+            "How it works: Supreme Court held that sub-classification powers arise under Article 15(4) and Article 16(4) for affirmative action.",
+            "OPERATIONAL_MECHANISM",
+        )
+        self._add_sentence(
+            s5, "5.2",
+            "Article 341 केवल जातियों की पहचान करता है; राज्यों द्वारा दिया जाने वाला आंतरिक कोटा Presidential List में कोई फेरबदल या संशोधन नहीं करता।",
+            "OPERATIONAL_MECHANISM",
+        )
+        self._add_sentence(
+            s5, "5.3",
+            "This mechanism allows state legislatures to create preferential percentages without excluding any community from the overarching constitutional category.",
+            "OPERATIONAL_MECHANISM",
+        )
+        sections.append(s5)
+
+        # 6. REAL_WORLD_APPLICATIONS (State Implementations & Ground Realities)
+        s6 = HinglishSection(
+            section_id="SEC_06_APPLICATIONS",
+            title="State Applications: Punjab, Haryana, Telangana and Tamil Nadu",
+            dimension_tag="REAL_WORLD_APPLICATIONS",
+            objective="Examine how sub-quotas operate in state reservations.",
+            visual_category="Geographical Map / State Policy Comparison",
+        )
+        self._add_sentence(
+            s6, "6.1",
+            "For example, Punjab reserved 50 percent of SC quotas for Valmikis and Mazhabi Sikhs under the Punjab Act of 2006.",
+            "REAL_WORLD_APPLICATIONS",
+        )
+        self._add_sentence(
+            s6, "6.2",
+            "इसी प्रकार तमिलनाडु में अरुंथथियार समुदाय और तेलंगाना में मडिगा समुदाय दशकों से आंतरिक आरक्षण की मांग कर रहे थे।",
+            "REAL_WORLD_APPLICATIONS",
+        )
+        sections.append(s6)
+
+        # 7. CONSTITUTIONAL_PROVISIONS (Empirical Data Requirement & Limits)
+        s7 = HinglishSection(
+            section_id="SEC_07_PROVISIONS",
+            title="Mandatory Safeguards: The Empirical Quantifiable Data Test",
+            dimension_tag="CONSTITUTIONAL_PROVISIONS",
+            objective="Detail the mandatory empirical requirement preventing arbitrary political sub-classification.",
+            visual_category="Data Verification / Statistical Audit Infographic",
+        )
+        self._add_sentence(
+            s7, "7.1",
+            "Supreme Court ने स्पष्ट सीमा और limitation निर्धारित की है: राज्य सरकारें राजनीतिक इच्छाशक्ति या सनक के आधार पर उप-वर्गीकरण नहीं कर सकतीं।",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        self._add_sentence(
+            s7, "7.2",
+            "States must produce quantifiable and empirical data demonstrating the relative backwardness and inadequate representation of the targeted sub-castes in public services.",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        self._add_sentence(
+            s7, "7.3",
+            "इसके अलावा, 100 प्रतिशत कोटा किसी एक उप-जाति को नहीं दिया जा सकता, जिससे अन्य जातियां पूर्णतः वंचित हो जाएं।",
+            "CONSTITUTIONAL_PROVISIONS",
+        )
+        sections.append(s7)
+
+        # 8. LANDMARK_JUDGMENTS (Majority Verdict & Creamy Layer Principle)
+        s8 = HinglishSection(
+            section_id="SEC_08_PRECEDENTS",
+            title="The Verdict Deconstruction: 6:1 Majority & The Creamy Layer Debate",
+            dimension_tag="LANDMARK_JUDGMENTS",
+            objective="Analyze the 6:1 split and the significant observations on creamy layer within SCs.",
+            visual_category="Judicial Bench 3D Representation / Split Verdict Graphic",
+        )
+        self._add_sentence(
+            s8, "8.1",
+            "7 जजों में से 6 जजों ने उप-वर्गीकरण के पक्ष में निर्णय दिया, जबकि Justice Bela Trivedi ने असहमति व्यक्त की।",
+            "LANDMARK_JUDGMENTS",
+        )
+        self._add_sentence(
+            s8, "8.2",
+            "Justice B.R. Gavai और तीन अन्य जजों ने महत्वपूर्ण टिप्पणी की कि SC समुदाय के भीतर भी Creamy Layer सिद्धांत लागू होना चाहिए ताकि लाभ वास्तव में जरूरतमंदों तक पहुंचे।",
+            "LANDMARK_JUDGMENTS",
+        )
+        self._add_sentence(
+            s8, "8.3",
+            "हालांकि, क्रीमी लेयर की पहचान के लिए राज्य को स्पष्ट दिशा-निर्देश तैयार करने होंगे जो OBC क्रीमी लेयर से भिन्न हो सकते हैं।",
+            "LANDMARK_JUDGMENTS",
+        )
+        sections.append(s8)
+
+        # 9. DEBATES_AND_CRITICISMS
+        s9 = HinglishSection(
+            section_id="SEC_09_DEBATES",
+            title="Constitutional Debates & Implementation Challenges",
+            dimension_tag="DEBATES_AND_CRITICISMS",
+            objective="Highlight concerns regarding community fragmentation and caste census data.",
+            visual_category="Debate Balance Scale / Policy Dilemma Diagram",
+        )
+        self._add_sentence(
+            s9, "9.1",
+            "आलोचकों का तर्क है कि उप-वर्गीकरण से दलित एकता कमजोर हो सकती है और चुनावी लाभ के लिए जातियों के बीच प्रतिस्पर्धा बढ़ सकती है।",
+            "DEBATES_AND_CRITICISMS",
+        )
+        self._add_sentence(
+            s9, "9.2",
+            "दूसरी ओर, समर्थकों का मानना है कि आरक्षण का लाभ केवल कुछ प्रभावशाली जातियों तक सीमित रहने से रोकने के लिए यह कदम अनिवार्य था।",
+            "DEBATES_AND_CRITICISMS",
+        )
+        sections.append(s9)
+
+        # 10. PRELIMS_RELEVANCE (Key Legal Facts)
+        s10 = HinglishSection(
+            section_id="SEC_10_PRELIMS",
+            title="High-Yield Prelims Takeaways: Case Law & Bench Composition",
+            dimension_tag="PRELIMS_RELEVANCE",
+            objective="List key facts for Prelims MCQs.",
+            visual_category="Fact Card / Precision Metrics Grid",
+        )
+        self._add_sentence(
+            s10, "10.1",
+            "याद रखें: केस का नाम State of Punjab v. Davinder Singh (2024) है; बेंच स्ट्रेंथ 7 जजों की थी; और फैसला 6:1 का था।",
+            "PRELIMS_RELEVANCE",
+        )
+        self._add_sentence(
+            s10, "10.2",
+            "इस फैसले ने 2005 के 5-जजों के E.V. Chinnaiah निर्णय को औपचारिक रूप से निरस्त यानी overrule किया है।",
+            "PRELIMS_RELEVANCE",
+        )
+        sections.append(s10)
+
+        # 11. MAINS_DIMENSIONS (Analytical Answer Framework)
+        s11 = HinglishSection(
+            section_id="SEC_11_MAINS",
+            title="Mains Analytical Framework: Equality, Federalism, and Social Justice",
+            dimension_tag="MAINS_DIMENSIONS",
+            objective="Provide a structured 3-tier analytical framework for Mains GS-II.",
+            visual_category="Mains Answer Structure / 3-Tier Diagram",
+        )
+        self._add_sentence(
+            s11, "11.1",
+            "Mains answer writing में Formal Equality (समान व्यवहार) और Substantive Equality (सच्ची समानता) के अंतर को रेखांकित करें।",
+            "MAINS_DIMENSIONS",
+        )
+        self._add_sentence(
+            s11, "11.2",
+            "Federalism के पहलू पर चर्चा करें कि कैसे राज्यों को अपने विशिष्ट सामाजिक संदर्भ के अनुसार नीतियां बनाने का अधिकार मिला है।",
+            "MAINS_DIMENSIONS",
+        )
+        sections.append(s11)
+
+        # 12. AUTHENTIC_PYQS (Exam Questions & Verification Cutoff)
+        s12 = HinglishSection(
+            section_id="SEC_12_PYQS",
+            title="Examination Question Deconstruction & Verified Cutoff Date",
+            dimension_tag="AUTHENTIC_PYQS",
+            objective="Formulate model Mains question and clearly record current affairs cutoff date.",
+            visual_category="PYQ Exam Solver / Interactive Question Overlay",
+        )
+        self._add_sentence(
+            s12, "12.1",
+            "मॉडल मेंस प्रश्न: 'परीक्षण कीजिए कि क्या अनुसूचित जातियों का उप-वर्गीकरण सामाजिक न्याय के उद्देश्य को मजबूत करता है या सामाजिक विखंडन की ओर ले जाता है?'",
+            "AUTHENTIC_PYQS",
+        )
+        self._add_sentence(
+            s12, "12.2",
+            "Note that the research and verification cutoff date is 2026-11-26; subsequent legislative enactments by individual states must be tracked under dynamic current affairs updates.",
+            "AUTHENTIC_PYQS",
+        )
+        sections.append(s12)
+
+        # 13. CONCLUSION_AND_RECAP
+        s13 = HinglishSection(
+            section_id="SEC_13_RECAP",
+            title="Summary & Conceptual Conclusion",
+            dimension_tag="CONCLUSION_AND_RECAP",
+            objective="Summarize the landmark impact of the Constitution Bench ruling.",
+            visual_category="Summary Reel / Legal Principle Synthesis",
+        )
+        self._add_sentence(
+            s13, "13.1",
+            f"आज हमने '{chapter_title}' में E.V. Chinnaiah से लेकर 2024 के 7-जजों के ऐतिहासिक फैसले के हर आयाम को समझा।",
+            "CONCLUSION_AND_RECAP",
+        )
+        self._add_sentence(
+            s13, "13.2",
+            "सामाजिक न्याय एक स्थिर अवधारणा नहीं है, बल्कि यह समय और जमीनी वास्तविकताओं के साथ विकसित होने वाली संवैधानिक प्रतिबद्धता है। धन्यवाद।",
             "CONCLUSION_AND_RECAP",
         )
         sections.append(s13)

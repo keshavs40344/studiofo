@@ -29,6 +29,12 @@ from upsc_studio.teaching.duration_planner import DurationPlanner
 from upsc_studio.teaching.engine import TeachingEngine
 from upsc_studio.teaching.hinglish_director import HinglishDirector
 from upsc_studio.qa.documentary_quality_gate import DocumentaryQualityGate
+from upsc_studio.universal.categories import CategoryRegistry
+from upsc_studio.universal.knowledge_mapper import KnowledgeMapper
+from upsc_studio.universal.pedagogy import UniversalPedagogyEngine
+from upsc_studio.universal.visual_director import UniversalVisualDirector
+from upsc_studio.universal.completeness_auditor import TopicCompletenessAuditor
+from upsc_studio.universal.duplicate_checker import DuplicateExplanationChecker
 from upsc_studio.tts.adapter import PiperTTSEngine
 from upsc_studio.video.renderer import VideoRenderer
 
@@ -80,6 +86,30 @@ class ChapterPipeline:
             notes_text=combined_notes,
         )
 
+        # 2B. Universal Knowledge Mapping & Scoping (16-point map & matrix)
+        knowledge_mapper = KnowledgeMapper()
+        topic_map = knowledge_mapper.build_topic_map(
+            topic_title=project.chapter_title,
+            notes_text=combined_notes,
+            target_duration_min=project.target_duration_min,
+        )
+        research_dir = project_dir / "research"
+        research_dir.mkdir(parents=True, exist_ok=True)
+        import json
+        (research_dir / "topic_knowledge_map.json").write_text(
+            json.dumps(topic_map.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
+        # 2C. Duplicate Explanation & Overlap Audit
+        dup_checker = DuplicateExplanationChecker(self.conn, self.projects_root)
+        overlap_analysis = dup_checker.check_topic_overlap(
+            new_topic_title=project.chapter_title,
+            planned_subtopics=[c.subtopic for c in topic_map.coverage_matrix],
+        )
+        (research_dir / "topic_overlap_analysis.json").write_text(
+            json.dumps(overlap_analysis.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
         # 3. Evidence & Claims Extraction
         evidence_engine = EvidenceEngine(self.conn, project_dir)
         if combined_notes.strip():
@@ -101,7 +131,8 @@ class ChapterPipeline:
         specialist_key, specialist_profile = SpecialistProfileEngine().select_profile(
             project.chapter_title, chapter_map.get("primary_papers", [])
         )
-        matched_pyqs = PYQEngine().match_chapter(project.chapter_title)
+        syllabus_entry_ids = [e["syllabus_item_id"] for e in chapter_map.get("entries", []) if isinstance(e, dict) and "syllabus_item_id" in e]
+        matched_pyqs = PYQEngine().match_chapter(project.chapter_title, syllabus_ids=syllabus_entry_ids)
 
         teaching_engine = TeachingEngine(self.conn, project_dir)
         teaching_summary = teaching_engine.generate_teaching_package(
@@ -240,7 +271,7 @@ class ChapterPipeline:
             resolution=hw.recommended_resolution,
         )
 
-        # 8. Final QA & 10-Gate Audit
+        # 8. Final QA & Multi-Gate Audits
         DurationPlanner(teaching_engine.WORDS_PER_MINUTE).build_schedule(
             project_dir=project_dir,
             sections=teaching_summary["sections"],
@@ -266,12 +297,28 @@ class ChapterPipeline:
             script_sections_count=len(teaching_summary["sections"]),
             pyq_count=len(matched_pyqs),
         )
+
+        # 8B. Automated Topic Completeness Audit across Matrix, Script, and Scenes
+        completeness_auditor = TopicCompletenessAuditor()
+        script_full_text = (project_dir / "teaching" / "script_hinglish_display.md").read_text(encoding="utf-8")
+        completeness_report = completeness_auditor.audit_completeness(
+            knowledge_map=topic_map,
+            script_text=script_full_text,
+            storyboard_scenes=[s.model_dump() for s in scenes],
+            rendered_scene_ids=[s.scene_id for s in scenes],
+        )
+        qa_dir = project_dir / "qa"
+        (qa_dir / "topic_completeness_report.json").write_text(
+            json.dumps(completeness_report.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+
         final_status = (
             ProjectStatus.NEEDS_REVIEW
             if (
                 qa_report["academic"]["status"] != "PASSED"
                 or qa_report["media"]["status"] != "PASSED"
                 or doc_quality_report.gate_status != "PASSED"
+                or not completeness_report.is_approved
             )
             else ProjectStatus.APPROVED
         )
@@ -294,4 +341,7 @@ class ChapterPipeline:
             "qa": qa_report,
             "ten_gates": ten_gates,
             "documentary_quality": doc_quality_report.to_dict(),
+            "topic_completeness": completeness_report.to_dict(),
+            "topic_knowledge_map": topic_map.to_dict(),
+            "overlap_analysis": overlap_analysis.to_dict(),
         }
