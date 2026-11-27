@@ -71,7 +71,7 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         pub_date="1978-01-25",
     )
 
-    ev.add_claim(
+    claim_part_iii = ev.add_claim(
         proj.id,
         "Part III (Articles 12-35) provides constitutionally protected Fundamental Rights.",
         "Constitutional Foundation",
@@ -80,7 +80,7 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         page_or_section="Articles 12 to 35",
         verification_notes="Verified against official legislative text.",
     )
-    ev.add_claim(
+    claim_article_32 = ev.add_claim(
         proj.id,
         "Article 32 guarantees the right to move the Supreme Court for enforcement of rights via 5 writs.",
         "Writs & Enforcement",
@@ -89,7 +89,7 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         page_or_section="Article 32",
         verification_notes="Habeas Corpus, Mandamus, Prohibition, Quo-Warranto, Certiorari.",
     )
-    ev.add_claim(
+    claim_maneka = ev.add_claim(
         proj.id,
         "Maneka Gandhi v. UOI (1978) established that procedure established by law under Article 21 must be just, fair, and reasonable.",
         "Judicial Evolution",
@@ -98,6 +98,14 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         page_or_section="1978 AIR 597",
         verification_notes="Substantive due process benchmark.",
     )
+    for claim_id, source_id, section, excerpt in [
+        (claim_part_iii, src_const, "Articles 12 to 35", "Part III of the Constitution contains the provisions relating to Fundamental Rights."),
+        (claim_article_32, src_const, "Article 32", "The right to move the Supreme Court for enforcement of Fundamental Rights is guaranteed."),
+        (claim_maneka, src_sc, "1978 AIR 597", "The procedure under Article 21 must be right, just and fair and not arbitrary."),
+    ]:
+        ev.verify_claim_against_source(
+            claim_id, source_id, section, excerpt, reviewer_id="acceptance-test-reviewer"
+        )
     ledger = ev.export_ledger(proj.id, proj.cutoff_date)
     assert ledger["status_counts"]["VERIFIED"] == 3
     assert ledger["status_counts"]["UNSUPPORTED"] == 0
