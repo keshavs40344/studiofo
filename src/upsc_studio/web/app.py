@@ -713,7 +713,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
 
     @app.get("/api/projects/{project_id}/shorts/{short_id}/video")
     def download_project_short(project_id: str, short_id: str) -> FileResponse:
-        if not re.fullmatch(r"SHORT_\\d{2}", short_id):
+        if not re.fullmatch(r"SHORT_\d{2}", short_id):
             raise HTTPException(status_code=400, detail="Invalid Short ID.")
         try:
             proj = mgr.get_project(project_id)
@@ -726,7 +726,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
 
     @app.get("/api/projects/{project_id}/shorts/{short_id}/subtitles")
     def download_project_short_subtitles(project_id: str, short_id: str) -> FileResponse:
-        if not re.fullmatch(r"SHORT_\\d{2}", short_id):
+        if not re.fullmatch(r"SHORT_\d{2}", short_id):
             raise HTTPException(status_code=400, detail="Invalid Short ID.")
         try:
             proj = mgr.get_project(project_id)
