@@ -109,7 +109,12 @@ class VoiceAudioProcessor:
             "intelligible_level": mean_db > -45.0,
         }
 
-    def generate_subtitles(self, scenes: list[SceneSpec], total_audio_sec: float | None = None) -> Path:
+    def generate_subtitles(
+        self,
+        scenes: list[SceneSpec],
+        total_audio_sec: float | None = None,
+        output_path: Path | None = None,
+    ) -> Path:
         """Align scene narration text to timed SRT subtitles and transcript.json."""
         est_total = sum(s.estimated_duration_sec for s in scenes) or 1.0
         scale = (total_audio_sec / est_total) if (total_audio_sec and total_audio_sec > 0) else 1.0
@@ -145,9 +150,11 @@ class VoiceAudioProcessor:
                 )
                 sub_idx += 1
 
-        srt_path = self.sub_dir / "subtitles.srt"
+        srt_path = Path(output_path) if output_path is not None else self.sub_dir / "subtitles.srt"
+        srt_path.parent.mkdir(parents=True, exist_ok=True)
         srt_path.write_text("\n".join(srt_blocks), encoding="utf-8")
-        (self.sub_dir / "transcript.json").write_text(
+        transcript_path = srt_path.with_suffix(".transcript.json")
+        transcript_path.write_text(
             json.dumps(transcript_segments, indent=2, ensure_ascii=False), encoding="utf-8"
         )
         return srt_path
