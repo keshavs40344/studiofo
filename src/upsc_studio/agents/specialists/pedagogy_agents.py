@@ -172,8 +172,22 @@ class HinglishLanguageEditorAgent(BaseSpecialistAgent):
 
     def execute(self, context: AgentExecutionContext) -> AgentExecutionResult:
         conn = context.metadata.get("conn")
-        claims_rows = conn.execute("SELECT * FROM claims WHERE project_id = ? AND status = 'VERIFIED'", (context.project_id,)).fetchall()
-        verified_claims = [dict(r) for r in claims_rows]
+        claims_rows = conn.execute(
+            "SELECT * FROM claims WHERE project_id = ? AND status = 'VERIFIED'",
+            (context.project_id,),
+        ).fetchall()
+        verified_claims = [
+            dict(r) for r in claims_rows
+            if (r["verification_notes"] or "").startswith("HUMAN_ATTESTED_BY:")
+            and "Evidence excerpt:" in (r["verification_notes"] or "")
+            and len((r["verification_notes"] or "").split("Evidence excerpt:", 1)[1].strip()) >= 10
+        ]
+        if not verified_claims:
+            return AgentExecutionResult(
+                agent_id=self.agent_id, agent_role=self.role, status=AgentStatus.FAILED,
+                quality_status=QualityCheckStatus.INSUFFICIENT_EVIDENCE,
+                errors=["Hinglish editing is blocked because no human-attested factual claims are available."],
+            )
 
         director = HinglishDirector(context.project_dir)
         pkg = director.export_documentary_package(
