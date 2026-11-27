@@ -38,6 +38,6 @@ def test_run_route_rejects_pasted_notes_over_limit(tmp_path) -> None:
     project_id = created.json()["id"]
     response = client.post(
         f"/api/projects/{project_id}/run",
-        data={"typed_notes": "x" * (2 * 1024 * 1024 + 1)},
+        data={"typed_notes": "x" * (512 * 1024 + 1)},
     )
     assert response.status_code == 413
