@@ -50,6 +50,7 @@ class TenGateAuditor:
             "teaching/script_hinglish.md",
             "teaching/teaching_outline.md",
             "storyboard/storyboard.json",
+            "research/topic_map.json",
             "subtitles/subtitles.srt",
         ):
             add_file(self.project_dir / relative)
@@ -189,11 +190,13 @@ class TenGateAuditor:
             "A_SYLLABUS_COMPLETENESS": (
                 "FAILED" if content_category == "upsc" and cov_count == 0
                 else (
-                    "PENDING" if content_category == "upsc" and unresolved_coverage
-                    else (
-                        "PENDING" if content_category != "upsc" and not topic_map_valid
-                        else ("PASSED" if reviewed("content_scope_coverage") else "PENDING")
+                    "PENDING"
+                    if (
+                        (content_category == "upsc" and bool(unresolved_coverage))
+                        or (content_category != "upsc" and not topic_map_valid)
+                        or not reviewed("content_scope_coverage")
                     )
+                    else "PASSED"
                 )
             ),
             "B_RESEARCH_SOURCE": "PASSED" if external_sources > 0 else "FAILED",
