@@ -10,9 +10,10 @@
 - Claims without that record remain `HUMAN_REVIEW_REQUIRED` or `UNSUPPORTED` and are excluded from the multi-pass safe factual narration list.
 - Future-dated sources and conflict annotations continue to exclude claims.
 
-## Attestation endpoint
+## Review and attestation endpoints
 
-`POST /api/projects/{project_id}/claims/{claim_id}/attest`
+- `GET /api/projects/{project_id}/claims` lists claims with source metadata and review status.
+- `POST /api/projects/{project_id}/claims/{claim_id}/attest`
 
 Required JSON fields:
 - `source_id`
