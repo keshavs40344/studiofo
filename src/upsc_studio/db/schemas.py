@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -42,6 +42,7 @@ class RightsStatus(str, Enum):
 class ProjectStatus(str, Enum):
     NOT_STARTED = "NOT_STARTED"
     PROCESSING = "PROCESSING"
+    WAITING_FOR_RESEARCH_REVIEW = "WAITING_FOR_RESEARCH_REVIEW"
     WAITING_FOR_VOICE = "WAITING_FOR_VOICE"
     NEEDS_REVIEW = "NEEDS_REVIEW"
     FAILED = "FAILED"
@@ -65,6 +66,7 @@ class QAGateStatus(str, Enum):
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     chapter_title: str = Field(..., min_length=2, max_length=200)
+    content_category: Literal["upsc", "general_knowledge", "current_affairs", "deep_dive"] = "upsc"
     exam_cycle: str = Field(default="UPSC CSE 2026")
     cutoff_date: str = Field(default="2026-11-26")
     target_duration_min: int = Field(default=30, ge=1, le=180)

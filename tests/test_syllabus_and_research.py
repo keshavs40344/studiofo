@@ -77,6 +77,11 @@ def test_claim_verification_requires_source(tmp_path: Path) -> None:
         source_id=src_id,
         page_or_section="Tenth Schedule",
     )
+    ev.verify_claim_against_source(
+        clm_id, src_id, "Tenth Schedule",
+        "The Constitution (Fifty-second Amendment) Act, 1985 inserted the Tenth Schedule.",
+        reviewer_id="research-test-reviewer",
+    )
     ledger = ev.export_ledger(proj.id, "2026-11-26")
     assert ledger["status_counts"]["VERIFIED"] == 1
     assert clm_id.startswith("clm_")

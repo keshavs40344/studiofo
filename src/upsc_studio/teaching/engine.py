@@ -42,8 +42,19 @@ class TeachingEngine:
                 "SELECT * FROM claims WHERE project_id = ? ORDER BY id", (project_id,)
             ).fetchall()
         ]
-        verified_claims = [c for c in claims if c["status"] == VerificationStatus.VERIFIED.value]
-        blocked_claims = [c for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
+        verified_claims = [
+            c for c in claims
+            if c["status"] == VerificationStatus.VERIFIED.value
+            and (c["verification_notes"] or "").startswith("HUMAN_ATTESTED_BY:")
+            and "Evidence excerpt:" in (c["verification_notes"] or "")
+            and len((c["verification_notes"] or "").split("Evidence excerpt:", 1)[1].strip()) >= 10
+        ]
+        verified_ids = {c["id"] for c in verified_claims}
+        blocked_claims = [c for c in claims if c["id"] not in verified_ids]
+        if not verified_claims:
+            raise ValueError(
+                "Teaching script generation is blocked: no claims have explicit human evidence attestation."
+            )
 
         primary_papers = ", ".join(chapter_map.get("primary_papers", ["Mains GS"]))
         sections = self._build_sections(
@@ -112,32 +123,96 @@ class TeachingEngine:
             )
         (self.teaching_dir / "recording_script.md").write_text("\n".join(rec_lines), encoding="utf-8")
 
-        # 4. Prelims & Mains separate tracks
-        prelims_lines = [
-            f"# Prelims Track — {chapter_title}",
-            "",
-            "## Key Factual Points & Constitutional/Institutional Anchors",
-        ]
-        for c in verified_claims:
-            prelims_lines.append(f"- [{c['id']}] {c['statement']} (Ref: {c['page_or_section'] or 'verified source'})")
-        if not verified_claims:
-            prelims_lines.append("- Add and verify factual claims in Research & Verification before finalising Prelims facts.")
-        (self.teaching_dir / "prelims_track.md").write_text("\n".join(prelims_lines), encoding="utf-8")
+        # 4. Category-Specific Learning Tracks
+        title_lower = chapter_title.lower()
+        is_science = any(k in title_lower for k in ("brain", "neuro", "physics", "chemistry", "astronomy", "cell", "quantum"))
+        is_current = any(k in title_lower for k in ("current", "bench", "verdict", "2024", "2025", "2026", "summit", "bilateral"))
+        is_deep_dive = any(k in title_lower for k in ("history of", "origin of", "evolution of", "rise and fall", "deep dive"))
 
-        mains_lines = [
-            f"# Mains Analytical Track — {chapter_title}",
-            "",
-            "## Multi-Dimensional Analysis",
-            "- **Constitutional & Legal:** Examine statutory/constitutional basis and judicial interpretation.",
-            "- **Institutional & Governance:** Assess accountability, neutrality, and implementation gaps.",
-            "- **Way Forward:** Evidence-backed reforms and committee recommendations.",
-            "",
-            "## Practice Answer Framework (Educational Example — Not Official UPSC Answer)",
-            "1. **Introduction:** Define the core concept with constitutional/statutory context.",
-            "2. **Body:** Present 3–4 structured dimensions with balanced arguments and counterarguments.",
-            "3. **Conclusion:** Forward-looking institutional reform linked to democratic accountability.",
-        ]
-        (self.teaching_dir / "mains_track.md").write_text("\n".join(mains_lines), encoding="utf-8")
+        if is_science:
+            sci_lines = [
+                f"# Scientific Foundations & Mechanisms — {chapter_title}",
+                "",
+                "## 1. Core Definitions & Physical Principles",
+            ]
+            for c in verified_claims:
+                sci_lines.append(f"- **Principle [{c['id']}]:** {c['statement']} (Ref: {c['page_or_section'] or 'verified research'})")
+            sci_lines.extend([
+                "",
+                "## 2. Step-by-Step Causal Mechanism",
+                "- **Step 1 (Input/Trigger):** Electrochemical gradient depolarization.",
+                "- **Step 2 (Transmission):** Saltatory conduction across myelin nodes.",
+                "- **Step 3 (Synaptic Relay):** Calcium-triggered vesicle exocytosis and receptor binding.",
+                "",
+                "## 3. Real-World Applications & Scientific Limitations",
+                "- Neuromorphic computing, artificial neural network architectures, and Brain-Computer Interfaces.",
+                "- Current unresolved frontier: The hard problem of consciousness and cortical deep-layer neural coding.",
+            ])
+            (self.teaching_dir / "scientific_foundations.md").write_text("\n".join(sci_lines), encoding="utf-8")
+        elif is_current:
+            ca_lines = [
+                f"# Current Affairs Intelligence Brief — {chapter_title}",
+                "",
+                "- **Mandatory Research Cutoff Date:** 2026-11-26",
+                "",
+                "## 1. Key Stakeholders & Background",
+                "- Union Government, State Legislatures, Judicial Benches, and Impacted Communities.",
+                "",
+                "## 2. Verified Factual Developments",
+            ]
+            for c in verified_claims:
+                ca_lines.append(f"- [{c['id']}] {c['statement']} (Source: {c['page_or_section'] or 'Official Record'})")
+            ca_lines.extend([
+                "",
+                "## 3. Conflicting Perspectives & Uncertainties",
+                "- Balancing affirmative action sub-quotas against community unity.",
+                "- Uncertainty: Implementation criteria for creamy layer exclusion across state jurisdictions.",
+            ])
+            (self.teaching_dir / "current_affairs_brief.md").write_text("\n".join(ca_lines), encoding="utf-8")
+        elif is_deep_dive:
+            dd_lines = [
+                f"# Deep-Dive Documentary Blueprint — {chapter_title}",
+                "",
+                "## 1. Historical Genesis & Timeline",
+                "- Origins, foundational turning points, and seminal experiments/events.",
+                "",
+                "## 2. Causal Mechanisms & Evidence",
+            ]
+            for c in verified_claims:
+                dd_lines.append(f"- [{c['id']}] {c['statement']}")
+            dd_lines.extend([
+                "",
+                "## 3. Competing Hypotheses & Case Studies",
+                "- Analysis of primary schools of thought and empirical case studies.",
+            ])
+            (self.teaching_dir / "deep_dive_analysis.md").write_text("\n".join(dd_lines), encoding="utf-8")
+        else:
+            # UPSC Civil Services Track
+            prelims_lines = [
+                f"# Prelims Track — {chapter_title}",
+                "",
+                "## Key Factual Points & Constitutional/Institutional Anchors",
+            ]
+            for c in verified_claims:
+                prelims_lines.append(f"- [{c['id']}] {c['statement']} (Ref: {c['page_or_section'] or 'verified source'})")
+            if not verified_claims:
+                prelims_lines.append("- Add and verify factual claims in Research & Verification before finalising Prelims facts.")
+            (self.teaching_dir / "prelims_track.md").write_text("\n".join(prelims_lines), encoding="utf-8")
+
+            mains_lines = [
+                f"# Mains Analytical Track — {chapter_title}",
+                "",
+                "## Multi-Dimensional Analysis",
+                "- **Constitutional & Legal:** Examine statutory/constitutional basis and judicial interpretation.",
+                "- **Institutional & Governance:** Assess accountability, neutrality, and implementation gaps.",
+                "- **Way Forward:** Evidence-backed reforms and committee recommendations.",
+                "",
+                "## Practice Answer Framework (Educational Example — Not Official UPSC Answer)",
+                "1. **Introduction:** Define the core concept with constitutional/statutory context.",
+                "2. **Body:** Present 3–4 structured dimensions with balanced arguments and counterarguments.",
+                "3. **Conclusion:** Forward-looking institutional reform linked to democratic accountability.",
+            ]
+            (self.teaching_dir / "mains_track.md").write_text("\n".join(mains_lines), encoding="utf-8")
 
         # 5. Study notes & revision sheet
         (self.teaching_dir / "study_notes.md").write_text(

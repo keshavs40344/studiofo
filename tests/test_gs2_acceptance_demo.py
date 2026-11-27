@@ -82,6 +82,11 @@ def test_gs2_complete_demo_with_animation_map_chart_otio_and_audit(tmp_path: Pat
         source_id=src_id,
         page_or_section="Tenth Schedule",
     )
+    ev.verify_claim_against_source(
+        clm_id, src_id, "Tenth Schedule",
+        "The Constitution (Fifty-second Amendment) Act, 1985 inserted the Tenth Schedule.",
+        reviewer_id="acceptance-test-reviewer",
+    )
     ev.export_ledger(proj.id, "2026-11-26")
 
     TeachingEngine(conn, proj_dir).generate_teaching_package(proj.id, proj.chapter_title, cmap)

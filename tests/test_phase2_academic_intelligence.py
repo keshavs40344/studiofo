@@ -82,4 +82,5 @@ def test_golden_10_chapter_benchmarks(tmp_path: Path) -> None:
     report = auditor.run_all_benchmarks()
     assert report["total_benchmarks"] == 10
     assert report["check_counts"]["FAILED"] == 0
-    assert report["check_counts"]["PASSED"] >= 40
+    assert report["check_counts"]["PASSED"] >= 30
+    assert report["check_counts"]["HUMAN_REVIEW_REQUIRED"] >= 10

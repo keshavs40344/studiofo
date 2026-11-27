@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 from upsc_studio.agents.contracts import AGENT_REGISTRY, AgentStatus, AgentTaskResult
+from upsc_studio.agents.runtime import AgentWorkflowRuntime
 from upsc_studio.pipeline.job_manifest import JobManifestManager
 from upsc_studio.pipeline.orchestrator import ChapterPipeline
 from upsc_studio.projects.manager import ProjectManager
@@ -18,12 +19,13 @@ from upsc_studio.publishing.youtube_publisher import YouTubePublisher
 
 
 class ExecutiveProducer:
-    """Central supervisor coordinating all 24 production agents via dependency graph with retries and checkpoints."""
+    """Central supervisor coordinating all 24 production agents via persistent SQLite runtime with retries and checkpoints."""
 
     def __init__(self, conn: sqlite3.Connection, projects_root: Path) -> None:
         self.conn = conn
         self.projects_root = projects_root
         self.mgr = ProjectManager(conn, projects_root)
+        self.runtime = AgentWorkflowRuntime(conn, projects_root)
 
     @staticmethod
     def run_with_retry(
@@ -33,13 +35,15 @@ class ExecutiveProducer:
         max_retries: int = 2,
         agent_name: str = "",
         dependencies: list[str] | None = None,
+        retry_safe: bool = True,
     ) -> tuple[AgentTaskResult, Optional[dict[str, Any]]]:
         """Execute an agent task with exponential backoff retry and structured contract output."""
         t0 = time.perf_counter()
         errors: list[str] = []
         deps = dependencies or []
+        effective_retries = max_retries if retry_safe else 0
 
-        for attempt in range(max_retries + 1):
+        for attempt in range(effective_retries + 1):
             try:
                 out = fn()
                 return (
@@ -53,14 +57,17 @@ class ExecutiveProducer:
                         output_refs=[str(v) for v in out.values() if isinstance(v, (str, Path))][:5],
                         execution_time_sec=round(time.perf_counter() - t0, 3),
                         retry_count=attempt,
-                        verification_status="VERIFIED",
+                        verification_status="PENDING_INDEPENDENT_REVIEW",
                     ),
                     out,
                 )
             except Exception as exc:
                 errors.append(str(exc))
-                if attempt < max_retries:
+                transient = isinstance(exc, (TimeoutError, ConnectionError)) or "timeout" in str(exc).lower()
+                if retry_safe and transient and attempt < effective_retries:
                     time.sleep(0.2 * (2**attempt))
+                else:
+                    break
 
         return (
             AgentTaskResult(
@@ -73,7 +80,7 @@ class ExecutiveProducer:
                 output_refs=[],
                 execution_time_sec=round(time.perf_counter() - t0, 3),
                 errors=errors,
-                retry_count=max_retries,
+                retry_count=max(0, len(errors) - 1),
                 verification_status="FAILED",
             ),
             None,
@@ -87,8 +94,10 @@ class ExecutiveProducer:
         voice_path: Optional[Path] = None,
         ai_narration: bool = True,
         youtube_token_path: Path | None = None,
+        allow_youtube_upload: bool = False,
+        human_publish_approval: bool = False,
     ) -> dict[str, Any]:
-        """Execute task graph tracking state of all 24 agents (REGISTERED, EXECUTING, COMPLETED, FAILED, BLOCKED)."""
+        """Execute full autonomous documentary factory: research -> AI/own voice -> MP4 -> QA -> YouTube check."""
         proj = self.mgr.get_project(project_id)
         proj_dir = Path(proj.root_dir)
         event_log = proj_dir / "logs" / "agent_events.jsonl"
@@ -136,6 +145,32 @@ class ExecutiveProducer:
                 "error": task_res.errors,
             }
 
+        # A review/voice checkpoint is a valid paused pipeline state, not a crash.
+        # Never continue into storyboard/render packaging when those artifacts do not exist.
+        if pipe_out.get("status") != "APPROVED":
+            blocked_reason = f"Core pipeline paused at {pipe_out.get('status', 'UNKNOWN')}."
+            for aid, astate in agent_states.items():
+                if aid != "AGENT_01":
+                    astate.status = AgentStatus.BLOCKED
+                    astate.errors = [blocked_reason]
+            with event_log.open("a", encoding="utf-8") as f:
+                for astate in agent_states.values():
+                    f.write(astate.model_dump_json() + "\n")
+            return {
+                **pipe_out,
+                "agents_registered": len(AGENT_REGISTRY),
+                "agent_states": {k: v.model_dump() for k, v in agent_states.items()},
+                "supervisor_task": task_res.model_dump(),
+                "editorial_and_shorts": None,
+                "youtube_publish": {
+                    "status": "BLOCKED_UNTIL_CORE_PIPELINE_APPROVED",
+                    "upload_attempted": False,
+                },
+            }
+
+        render_manifest = pipe_out.get("render_manifest") or {}
+        render_path = render_manifest.get("final_video")
+
         # Mark upstream completed agents based on pipeline output
         completed_agent_ids = [
             "AGENT_02",  # Syllabus
@@ -178,16 +213,32 @@ class ExecutiveProducer:
 
         # 3. YouTube Publishing (AGENT_23) & Analytics (AGENT_24)
         yt = YouTubePublisher(token_path=youtube_token_path)
-        final_mp4 = Path(pipe_out["render_manifest"]["final_video"]) if "render_manifest" in pipe_out else None
+        final_mp4 = Path(render_path) if render_path else None
         qa_passed = (
-            pipe_out.get("qa", {}).get("rights", {}).get("status") == "PASSED"
+            pipe_out.get("status") == "APPROVED"
+            and pipe_out.get("qa", {}).get("academic", {}).get("status") == "PASSED"
+            and pipe_out.get("qa", {}).get("rights", {}).get("status") == "PASSED"
             and pipe_out.get("qa", {}).get("media", {}).get("status") == "PASSED"
         )
-        yt_result = (
-            yt.upload_video(final_mp4, pipe_out["publishing_package"], qa_passed=qa_passed, privacy_status="private")
-            if final_mp4
-            else {"status": "PENDING_VIDEO_RENDER"}
-        )
+        if not final_mp4:
+            yt_result = {"status": "PENDING_VIDEO_RENDER"}
+        elif not (allow_youtube_upload and human_publish_approval):
+            yt_result = {
+                "status": "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+                "upload_attempted": False,
+                "privacy_status": "private",
+            }
+        elif not qa_passed:
+            yt_result = {"status": "BLOCKED_QA_FAILED", "upload_attempted": False}
+        else:
+            yt_result = yt.upload_video(
+                final_mp4,
+                pipe_out["publishing_package"],
+                qa_passed=True,
+                privacy_status="private",
+                user_approved=True,
+                human_approved_by="Executive Producer",
+            )
         agent_states["AGENT_23"].status = (
             AgentStatus.COMPLETED if yt_result.get("status") == "UPLOADED" else AgentStatus.BLOCKED
         )

@@ -62,10 +62,18 @@ class BenchmarkAuditor:
             ev.extract_claims_from_text(proj.id, "Notes", bm["sample_notes"], default_source_id=src_id)
             ledger = ev.export_ledger(proj.id, "2026-11-26")
 
-            teach = TeachingEngine(self.conn, proj_dir).generate_teaching_package(
-                proj.id, bm["title"], cmap, notes_excerpt=bm["sample_notes"]
-            )
-            qbank = json.loads((proj_dir / "teaching" / "question_bank.json").read_text(encoding="utf-8"))
+            teaching_review_required = False
+            try:
+                teach = TeachingEngine(self.conn, proj_dir).generate_teaching_package(
+                    proj.id, bm["title"], cmap, notes_excerpt=bm["sample_notes"]
+                )
+                qbank = json.loads((proj_dir / "teaching" / "question_bank.json").read_text(encoding="utf-8"))
+            except ValueError as exc:
+                if "human evidence attestation" not in str(exc):
+                    raise
+                teach = None
+                qbank = {"prelims_practice_mcqs": []}
+                teaching_review_required = True
             pyq_errors = self.pyq.validate_question_bank_authenticity(qbank)
             matched_pyqs = self.pyq.match_chapter(bm["title"])
             mains_fw = self.mains.build_framework(
@@ -76,7 +84,10 @@ class BenchmarkAuditor:
             checks = {
                 "syllabus_mapping_audit": "PASSED" if syllabus_ok else "FAILED",
                 "pyq_authenticity_audit": "PASSED" if not pyq_errors else "FAILED",
-                "teaching_and_mains_framework": "PASSED" if (teach["sections_count"] >= 5 and mains_fw["directive_word"] == "CRITICALLY EXAMINE") else "FAILED",
+                "teaching_and_mains_framework": (
+                    "HUMAN_REVIEW_REQUIRED" if teaching_review_required else
+                    "PASSED" if (teach["sections_count"] >= 5 and mains_fw["directive_word"] == "CRITICALLY EXAMINE") else "FAILED"
+                ),
                 "adaptive_visual_selection": "PASSED" if bool(visual_choice) else "FAILED",
                 "fact_verification_audit": "HUMAN_REVIEW_REQUIRED" if ledger["status_counts"]["HUMAN_REVIEW_REQUIRED"] > 0 or ledger["status_counts"]["UNSUPPORTED"] > 0 else "PASSED",
                 "voice_and_video_render": "PENDING",

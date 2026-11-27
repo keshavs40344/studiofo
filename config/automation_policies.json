@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "execution_model": "local_first_dependency_aware",
+  "default_language": "hinglish",
+  "resource_policy": {
+    "max_parallel_jobs": 2,
+    "cpu_safe_mode": true,
+    "resume_from_checkpoint": true,
+    "avoid_duplicate_active_jobs": true,
+    "do_not_download_large_models_without_approval": true
+  },
+  "global_rules": {
+    "never_invent_sources_or_test_results": true,
+    "preserve_user_files_and_existing_project_state": true,
+    "retry_only_transient_failures": true,
+    "max_retries": 2,
+    "exponential_backoff_seconds": [1, 2],
+    "record_every_stage_event": true,
+    "continue_independent_stages_when_safe": true,
+    "require_human_approval_for_publication": true,
+    "require_human_approval_for_paid_services": true,
+    "require_human_approval_for_voice_cloning": true
+  },
+  "pipelines": [
+    {
+      "id": "documentary_production",
+      "stages": [
+        {"id": "input_validation", "depends_on": [], "required": true},
+        {"id": "document_ingestion", "depends_on": ["input_validation"], "required": true},
+        {"id": "topic_mapping", "depends_on": ["document_ingestion"], "required": true},
+        {"id": "research_and_evidence", "depends_on": ["topic_mapping"], "required": true},
+        {"id": "coverage_planning", "depends_on": ["research_and_evidence"], "required": true},
+        {"id": "script_generation", "depends_on": ["coverage_planning"], "required": true},
+        {"id": "script_red_team", "depends_on": ["script_generation"], "required": true},
+        {"id": "storyboard_and_visuals", "depends_on": ["script_red_team"], "required": true},
+        {"id": "voice_and_subtitles", "depends_on": ["storyboard_and_visuals"], "required": false},
+        {"id": "render", "depends_on": ["voice_and_subtitles"], "required": false},
+        {"id": "academic_rights_media_qa", "depends_on": ["render"], "required": true},
+        {"id": "release_candidate", "depends_on": ["academic_rights_media_qa"], "required": true},
+        {"id": "public_upload", "depends_on": ["release_candidate"], "required": true, "approval_required": true}
+      ]
+    },
+    {
+      "id": "repository_maintenance",
+      "stages": [
+        {"id": "json_validation", "depends_on": [], "required": true},
+        {"id": "unit_and_integration_tests", "depends_on": ["json_validation"], "required": true},
+        {"id": "dependency_and_licence_review", "depends_on": ["unit_and_integration_tests"], "required": false},
+        {"id": "report_only", "depends_on": ["unit_and_integration_tests"], "required": true}
+      ]
+    }
+  ],
+  "event_triggers": [
+    {"event": "new_project_created", "pipeline": "documentary_production", "mode": "manual_or_user_confirmed"},
+    {"event": "new_source_added", "pipeline": "documentary_production", "mode": "resume_from_research_checkpoint"},
+    {"event": "voice_recording_added", "pipeline": "documentary_production", "mode": "resume_from_voice_checkpoint"},
+    {"event": "git_push_or_pull_request", "pipeline": "repository_maintenance", "mode": "github_actions"}
+  ],
+  "status_values": ["PENDING", "RUNNING", "COMPLETED", "FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"]
+}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 SCHEMA_SQL = """
 PRAGMA foreign_keys = ON;
@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS projects (
     name TEXT NOT NULL,
     slug TEXT NOT NULL,
     chapter_title TEXT NOT NULL,
+    content_category TEXT NOT NULL DEFAULT 'upsc',
     exam_cycle TEXT NOT NULL,
     cutoff_date TEXT NOT NULL,
     target_duration_min INTEGER NOT NULL DEFAULT 30,
@@ -143,6 +144,58 @@ CREATE TABLE IF NOT EXISTS backups (
     notes TEXT NOT NULL DEFAULT '',
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS workflow_runs (
+    id TEXT PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'REGISTERED',
+    content_pillar TEXT NOT NULL DEFAULT 'UPSC_CIVIL_SERVICES',
+    target_duration_min INTEGER NOT NULL DEFAULT 15,
+    current_task_id TEXT,
+    started_at TEXT,
+    completed_at TEXT,
+    error_message TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_tasks (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    agent_id TEXT NOT NULL,
+    agent_role TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    is_retry_safe INTEGER NOT NULL DEFAULT 1,
+    has_side_effects INTEGER NOT NULL DEFAULT 0,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    max_retries INTEGER NOT NULL DEFAULT 2,
+    input_json TEXT NOT NULL DEFAULT '{}',
+    output_json TEXT NOT NULL DEFAULT '{}',
+    error_message TEXT NOT NULL DEFAULT '',
+    started_at TEXT,
+    completed_at TEXT,
+    FOREIGN KEY (run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS workflow_checkpoints (
+    id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    task_id TEXT NOT NULL,
+    checkpoint_name TEXT NOT NULL,
+    state_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (run_id) REFERENCES workflow_runs(id) ON DELETE CASCADE,
+    FOREIGN KEY (task_id) REFERENCES workflow_tasks(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS system_automation_logs (
+    id TEXT PRIMARY KEY,
+    task_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    details_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL
+);
 """
 
 
@@ -159,6 +212,9 @@ def init_db(db_path: Path) -> sqlite3.Connection:
     """Create tables if missing and record schema version."""
     conn = get_connection(db_path)
     conn.executescript(SCHEMA_SQL)
+    project_columns = {row["name"] for row in conn.execute("PRAGMA table_info(projects)").fetchall()}
+    if "content_category" not in project_columns:
+        conn.execute("ALTER TABLE projects ADD COLUMN content_category TEXT NOT NULL DEFAULT 'upsc'")
     conn.execute(
         "INSERT OR REPLACE INTO schema_meta (key, value) VALUES (?, ?)",
         ("schema_version", str(SCHEMA_VERSION)),
