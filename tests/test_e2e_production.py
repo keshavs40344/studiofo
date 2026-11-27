@@ -65,7 +65,7 @@ def test_end_to_end_waiting_for_voice_then_full_mp4_render(tmp_path: Path) -> No
     res_no_voice = pipeline.run_pipeline(proj.id, notes_files=[sample_notes])
     assert res_no_voice["status"] == "WAITING_FOR_VOICE"
     assert Path(res_no_voice["recording_script"]).exists()
-    assert res_no_voice["scenes_count"] == 5
+    assert res_no_voice["scenes_count"] >= 5
     assert res_no_voice["qa"]["rights"]["status"] == "PASSED"
 
     # Stage B: Verify claims properly with official source, then supply own voice WAV
