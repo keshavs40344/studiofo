@@ -141,6 +141,18 @@ class EvidenceEngine:
                 if default_source_id
                 else "No source linked; unsupported until verified."
             )
+            if default_source_id:
+                existing = self.conn.execute(
+                    """
+                    SELECT id FROM claims
+                    WHERE project_id = ? AND source_id = ?
+                      AND chapter_section = ? AND statement = ?
+                    LIMIT 1
+                    """,
+                    (project_id, default_source_id, chapter_section, sent),
+                ).fetchone()
+                if existing:
+                    continue
             cid = self.add_claim(
                 project_id=project_id,
                 statement=sent,
@@ -159,27 +171,49 @@ class EvidenceEngine:
         page_or_section: str,
         evidence_excerpt: str,
         ref_period: Optional[str] = None,
+        reviewer: str = "",
     ) -> bool:
-        """Verify an atomic claim against a registered source with excerpt proof."""
-        src_row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
+        """Record a human attestation that the cited excerpt supports an atomic claim.
+
+        This method checks linkage and records the attestation; it does not independently
+        semantically compare the excerpt with the claim or fetch the URL.
+        """
+        claim_row = self.conn.execute(
+            "SELECT * FROM claims WHERE id = ?", (claim_id,)
+        ).fetchone()
+        if not claim_row:
+            raise ValueError(f"Claim ID '{claim_id}' does not exist.")
+        src_row = self.conn.execute(
+            "SELECT * FROM sources WHERE id = ?", (source_id,)
+        ).fetchone()
         if not src_row:
             raise ValueError(f"Source ID '{source_id}' does not exist.")
-
-        # Ensure excerpt exists and supports claim
+        if src_row["project_id"] != claim_row["project_id"] or claim_row["project_id"] is None:
+            raise ValueError("Claim and source must belong to the same project.")
+        if not reviewer.strip():
+            raise ValueError("A named human reviewer is required.")
         if not evidence_excerpt or len(evidence_excerpt.strip()) < 10:
-            raise ValueError("Evidence excerpt too brief or missing; cannot establish verification.")
+            raise ValueError("Evidence excerpt too brief or missing; cannot record verification.")
 
         tier = src_row["source_tier"]
-        notes = f"Verified against {tier} ({src_row['title']}). Excerpt: {evidence_excerpt[:100]}..."
+        notes = (
+            f"Human-attested by {reviewer.strip()} against {tier} ({src_row['title']}). "
+            f"Recorded excerpt: {evidence_excerpt[:250]}"
+        )
 
         self.conn.execute(
             """
             UPDATE claims
             SET status = ?, source_id = ?, page_or_section = ?, ref_period = ?, verification_notes = ?
-            WHERE id = ?
+            WHERE id = ? AND project_id = ?
             """,
-            (VerificationStatus.VERIFIED.value, source_id, page_or_section, ref_period, notes, claim_id),
+            (
+                VerificationStatus.VERIFIED.value, source_id, page_or_section,
+                ref_period, notes, claim_id, claim_row["project_id"],
+            ),
         )
+        if self.conn.execute("SELECT changes()").fetchone()[0] != 1:
+            raise ValueError("Claim was not updated; verify the project and claim identifiers.")
         self.conn.commit()
         return True
 
