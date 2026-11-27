@@ -68,6 +68,12 @@ def test_teaching_script_uses_only_verified_claim_text_and_external_source_gate(
         source_id=source_id,
         page_or_section="Chapter 2",
     )
+    SyllabusEngine(conn).map_chapter(
+        project_id=project.id,
+        project_dir=project_dir,
+        chapter_title=project.chapter_title,
+        notes_text="",
+    )
 
     package = TeachingEngine(conn, project_dir).generate_teaching_package(
         project_id=project.id,
