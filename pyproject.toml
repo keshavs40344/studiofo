@@ -37,6 +37,10 @@ charts = [
     "vl-convert-python>=1.6.0",
 ]
 
+i18n = [
+    "argostranslate>=1.9.6",
+]
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
