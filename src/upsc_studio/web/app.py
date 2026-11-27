@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
-from upsc_studio.db.schemas import ProjectCreate, SceneSpec
+from upsc_studio.db.schemas import ManualQAReview, ProjectCreate, SceneSpec, utc_now_iso
 from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
@@ -38,7 +38,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
     .PENDING, .WAITING_FOR_VOICE { background: #92400e; color: #fef3c7; }
     pre { background: #0f172a; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 12px; max-height: 320px; }
     .proj-item { padding: 8px; border-bottom: 1px solid #334155; cursor: pointer; }
-    .proj-item:hover { background: #0f172a; }
+    .proj-item:hover { background: #0f172a; }\n    input[type=checkbox] { width: auto; margin-right: 8px; }
   </style>
 </head>
 <body>
@@ -85,6 +85,19 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         </div>
         <h3>QA Gates & Release Readiness</h3>
         <div id="qa-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
+        <div class="card" style="background:#0f172a;">
+          <h3>Manual Quality Review</h3>
+          <p>Final release remains blocked until these checks are actually reviewed. Tick only after inspecting the generated files/video.</p>
+          <label>Reviewer</label>
+          <input id="reviewer-name" value="" placeholder="Your name" />
+          <label><input type="checkbox" id="review-teaching" /> I reviewed the teaching script for clarity, completeness and unsupported statements.</label>
+          <label><input type="checkbox" id="review-visuals" /> I checked scene-by-scene visual relevance, labels, maps, charts and asset attribution.</label>
+          <label><input type="checkbox" id="review-subtitles" /> I checked subtitle wording and timing against the narration.</label>
+          <label><input type="checkbox" id="review-playback" /> I played the final video and checked beginning, middle, end, audio, transitions and subtitles.</label>
+          <label>Review notes (optional)</label>
+          <textarea id="review-notes" rows="2" placeholder="List any issues or corrections..."></textarea>
+          <button class="secondary" onclick="saveManualReview()">Save Manual Review</button>
+        </div>
         <h3>Pipeline Output & Diagnostics</h3>
         <pre id="w-output">Select or run a project to inspect deliverables.</pre>
       </div>
@@ -141,6 +154,14 @@ async function openProject(id) {
   document.getElementById('qa-badges').innerHTML = (data.qa_gates || []).map(g =>
     `<span class="badge ${g.status}">${g.gate_name}: ${g.status}</span>`
   ).join('');
+  const review = data.manual_review || {};
+  const checks = review.checks || {};
+  document.getElementById('reviewer-name').value = review.reviewer || '';
+  document.getElementById('review-notes').value = review.notes || '';
+  document.getElementById('review-teaching').checked = checks.teaching_clarity === true;
+  document.getElementById('review-visuals').checked = checks.visual_relevance === true;
+  document.getElementById('review-subtitles').checked = checks.voice_subtitle_alignment === true;
+  document.getElementById('review-playback').checked = checks.final_playback_inspection === true;
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
 }
 
@@ -159,6 +180,25 @@ async function runPipeline() {
   await loadProjects();
   await openProject(currentProjectId);
   document.getElementById('w-output').textContent = JSON.stringify(result, null, 2);
+}
+
+async function saveManualReview() {
+  if (!currentProjectId) return;
+  const payload = {
+    reviewer: document.getElementById('reviewer-name').value,
+    teaching_clarity: document.getElementById('review-teaching').checked,
+    visual_relevance: document.getElementById('review-visuals').checked,
+    voice_subtitle_alignment: document.getElementById('review-subtitles').checked,
+    final_playback_inspection: document.getElementById('review-playback').checked,
+    notes: document.getElementById('review-notes').value
+  };
+  const res = await fetch(`/api/projects/${currentProjectId}/review`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  if (!res.ok) { alert('Review not saved: ' + (data.detail || 'Unknown error')); return; }
+  await openProject(currentProjectId);
+  document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
 }
 
 async function backupCurrent() {
@@ -221,7 +261,19 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         claims_count = conn.execute(
             "SELECT COUNT(*) AS cnt FROM claims WHERE project_id = ?", (project_id,)
         ).fetchone()["cnt"]
-        return {"project": proj.model_dump(), "qa_gates": gates, "claims_count": claims_count}
+        review_path = Path(proj.root_dir) / "qa" / "manual_review.json"
+        manual_review = {}
+        if review_path.is_file():
+            try:
+                manual_review = json.loads(review_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                manual_review = {"review_error": "Saved manual review file is unreadable."}
+        return {
+            "project": proj.model_dump(),
+            "qa_gates": gates,
+            "claims_count": claims_count,
+            "manual_review": manual_review,
+        }
 
     @app.post("/api/projects/{project_id}/run")
     async def run_project_pipeline(
@@ -263,6 +315,43 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             allow_youtube_upload=False,
             human_publish_approval=False,
         )
+
+    @app.post("/api/projects/{project_id}/review")
+    def save_manual_review(project_id: str, payload: ManualQAReview) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        project_dir = Path(proj.root_dir)
+        review_path = project_dir / "qa" / "manual_review.json"
+        review_path.parent.mkdir(parents=True, exist_ok=True)
+        review = {
+            "reviewer": payload.reviewer,
+            "checks": {
+                "teaching_clarity": payload.teaching_clarity,
+                "visual_relevance": payload.visual_relevance,
+                "voice_subtitle_alignment": payload.voice_subtitle_alignment,
+                "final_playback_inspection": payload.final_playback_inspection,
+            },
+            "notes": payload.notes,
+            "reviewed_at": utc_now_iso(),
+        }
+        temp_path = review_path.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(review, indent=2, ensure_ascii=False), encoding="utf-8")
+        temp_path.replace(review_path)
+        response = {"manual_review": review}
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        if storyboard_path.is_file():
+            try:
+                raw_scenes = json.loads(storyboard_path.read_text(encoding="utf-8"))
+                scenes = [SceneSpec.model_validate(item) for item in raw_scenes]
+                final_video = project_dir / "render" / "final" / "final_video.mp4"
+                response["ten_gates"] = TenGateAuditor(conn, project_dir).run_ten_gates(
+                    project_id, scenes, final_video if final_video.is_file() else None
+                )
+            except (OSError, ValueError, json.JSONDecodeError) as exc:
+                response["qa_error"] = f"Review saved, but QA report could not be refreshed: {exc}"
+        return response
 
     @app.post("/api/projects/{project_id}/backup")
     def backup_project(project_id: str) -> dict:
