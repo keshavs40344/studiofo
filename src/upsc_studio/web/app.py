@@ -88,6 +88,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
         <div id="qa-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
         <div class="card" style="background:#0f172a;">
           <h3>Manual Quality Review</h3>
+          <p id="manual-review-status">No current review is recorded.</p>
           <p>Final release remains blocked until these checks are actually reviewed. Tick only after inspecting the generated files/video.</p>
           <label>Reviewer</label>
           <input id="reviewer-name" value="" placeholder="Your name" />
@@ -157,12 +158,16 @@ async function openProject(id) {
   ).join('');
   const review = data.manual_review || {};
   const checks = review.checks || {};
+  const reviewCurrent = review.review_is_current === true;
   document.getElementById('reviewer-name').value = review.reviewer || '';
   document.getElementById('review-notes').value = review.notes || '';
-  document.getElementById('review-teaching').checked = checks.teaching_clarity === true;
-  document.getElementById('review-visuals').checked = checks.visual_relevance === true;
-  document.getElementById('review-subtitles').checked = checks.voice_subtitle_alignment === true;
-  document.getElementById('review-playback').checked = checks.final_playback_inspection === true;
+  document.getElementById('manual-review-status').textContent = reviewCurrent
+    ? `Current review by ${review.reviewer}`
+    : (review.reviewer ? 'Saved review is stale; re-check the current outputs.' : 'No current review is recorded.');
+  document.getElementById('review-teaching').checked = reviewCurrent && checks.teaching_clarity === true;
+  document.getElementById('review-visuals').checked = reviewCurrent && checks.visual_relevance === true;
+  document.getElementById('review-subtitles').checked = reviewCurrent && checks.voice_subtitle_alignment === true;
+  document.getElementById('review-playback').checked = reviewCurrent && checks.final_playback_inspection === true;
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
 }
 
@@ -267,8 +272,24 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         if review_path.is_file():
             try:
                 manual_review = json.loads(review_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                manual_review = {"review_error": "Saved manual review file is unreadable."}
+                storyboard_path = Path(proj.root_dir) / "storyboard" / "storyboard.json"
+                scenes: list[SceneSpec] = []
+                if storyboard_path.is_file():
+                    raw_scenes = json.loads(storyboard_path.read_text(encoding="utf-8"))
+                    scenes = [SceneSpec.model_validate(item) for item in raw_scenes]
+                final_video = Path(proj.root_dir) / "render" / "final" / "final_video.mp4"
+                auditor = TenGateAuditor(conn, Path(proj.root_dir))
+                current_fingerprint = auditor.review_fingerprint(
+                    project_id, scenes, final_video if final_video.is_file() else None
+                )
+                manual_review["review_is_current"] = (
+                    manual_review.get("artifact_fingerprint") == current_fingerprint
+                )
+            except (OSError, ValueError, json.JSONDecodeError):
+                manual_review = {
+                    "review_error": "Saved manual review is unreadable or its reviewed artifacts changed.",
+                    "review_is_current": False,
+                }
         return {
             "project": proj.model_dump(),
             "qa_gates": gates,
