@@ -572,8 +572,8 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
 
-        if len(typed_notes.encode("utf-8")) > 2 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="Pasted notes exceed the 2 MB limit.")
+        if len(typed_notes.encode("utf-8")) > 512 * 1024:
+            raise HTTPException(status_code=413, detail="Pasted notes exceed the 512 KB limit.")
 
         proj_dir = Path(proj.root_dir)
         tmp_dir = proj_dir / "inputs" / "uploads_tmp"
