@@ -22,11 +22,6 @@ from upsc_studio.tts.pronunciation import PronunciationNormalizer
 def test_agent_registry_and_retry_recovery(tmp_path: Path) -> None:
     assert len(AGENT_REGISTRY) == 24
     conn = init_db(tmp_path / "ag.db")
-    ev.verify_claim_against_source(
-        claim_id, src, "Part III",
-        "Part III of the Constitution contains the provisions relating to Fundamental Rights.",
-        reviewer_id="factory-test-reviewer",
-    )
 
     sup = ExecutiveProducer(conn, tmp_path / "projects")
 
@@ -100,6 +95,13 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
         status=VerificationStatus.VERIFIED,
         source_id=src,
         page_or_section="Part III",
+    )
+    ev.verify_claim_against_source(
+        claim_id,
+        src,
+        "Part III, Articles 12-35",
+        "Part III contains the provisions relating to Fundamental Rights.",
+        reviewer_id="factory-test-reviewer",
     )
 
     sup = ExecutiveProducer(conn, tmp_path / "projects")
