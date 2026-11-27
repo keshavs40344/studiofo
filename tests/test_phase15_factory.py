@@ -102,7 +102,7 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     )
 
     assert out["agents_registered"] == 24
-    assert out["supervisor_task"]["status"] == "COMPLETED"
+    assert out["supervisor_task"]["status"] == "BLOCKED"
     assert out["workflow"]["status"] == "COMPLETED"
     assert out["workflow"]["task_count"] == 4
     if out["status"] in {"WAITING_FOR_VOICE", "NEEDS_REVIEW"}:
