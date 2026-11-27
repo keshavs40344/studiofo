@@ -13,7 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
-from upsc_studio.db.schemas import ManualQAReview, ProjectCreate, SceneSpec, utc_now_iso
+from upsc_studio.db.schemas import ManualQAReview, ProjectCreate, ProjectStatus, SceneSpec, utc_now_iso
 from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
 from upsc_studio.qa.ten_gates import TenGateAuditor
@@ -301,6 +301,14 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                 ten_gates = json.loads(ten_gate_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 ten_gates = {"report_error": "Saved 10-gate report is unreadable."}
+        if (
+            proj.status == ProjectStatus.APPROVED
+            and (
+                manual_review.get("review_is_current") is not True
+                or ten_gates.get("ready_for_publication") != "PASSED"
+            )
+        ):
+            proj = mgr.update_status(project_id, ProjectStatus.NEEDS_REVIEW)
         return {
             "project": proj.model_dump(),
             "qa_gates": gates,
@@ -416,6 +424,7 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             human_approved_by=approver,
         )
         if report["ready_for_publication"] != "PASSED":
+            mgr.update_status(project_id, ProjectStatus.NEEDS_REVIEW)
             blockers = [
                 f"{name}={status}"
                 for name, status in report.get("gates", {}).items()
@@ -425,7 +434,8 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
                 status_code=400,
                 detail="Final approval blocked: " + (", ".join(blockers) or "QA requirements are not satisfied."),
             )
-        return report
+        mgr.update_status(project_id, ProjectStatus.APPROVED)
+        return {**report, "project_status": ProjectStatus.APPROVED.value}
 
     @app.get("/api/projects/{project_id}/video")
     def download_video(project_id: str) -> FileResponse:
