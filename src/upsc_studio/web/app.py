@@ -26,6 +26,7 @@ from upsc_studio.db.schemas import (
     ResearchClaimCreate,
     ResearchDiscoveryRequest,
     ResearchSourceCreate,
+    YouTubePublishRequest,
     SceneSpec,
     VerificationStatus,
     utc_now_iso,
@@ -41,6 +42,7 @@ from upsc_studio.audio.processor import VoiceAudioProcessor
 from upsc_studio.tts.adapter import PiperTTSEngine
 from upsc_studio.graphics.rights import AssetRightsLedger
 from upsc_studio.video.renderer import VideoRenderer
+from upsc_studio.publishing.youtube_publisher import YouTubePublisher
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -161,6 +163,20 @@ DASHBOARD_HTML = """<!DOCTYPE html>
           <label>Reviewer</label><input id="verify-reviewer" placeholder="Name of reviewer" />
           <button onclick="verifyClaim()">Mark Claim VERIFIED after source review</button>
           <pre id="research-output">No research records loaded.</pre>
+        </div>
+        <div class="card" style="background:#0f172a;">
+          <h3>YouTube Publishing</h3>
+          <p id="youtube-oauth-status">OAuth connection status not checked.</p>
+          <button class="secondary" onclick="refreshYouTubeStatus()">Check YouTube Connection</button>
+          <label>Privacy status</label>
+          <select id="youtube-privacy">
+            <option value="private">Private (default)</option>
+            <option value="unlisted">Unlisted</option>
+            <option value="public">Public</option>
+          </select>
+          <label><input type="checkbox" id="youtube-confirm" /> I reviewed the approved final video and explicitly authorise this upload for this run.</label>
+          <button onclick="publishVideo()">Upload Approved Video</button>
+          <pre id="youtube-output">Upload requires an OAuth token created from your own Google Desktop App credentials.</pre>
         </div>
         <h3>QA Gates & Release Readiness</h3>
         <div id="qa-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;"></div>
@@ -328,6 +344,36 @@ async function openProject(id) {
   }
   document.getElementById('w-output').textContent = JSON.stringify(data, null, 2);
   await loadResearch();
+}
+
+async function refreshYouTubeStatus() {
+  const res = await fetch('/api/youtube/status');
+  const data = await res.json();
+  document.getElementById('youtube-oauth-status').textContent = data.connected
+    ? 'YouTube OAuth token file is present. Upload permissions will be checked by Google when used.'
+    : 'YouTube is not connected. Run the local OAuth setup command after adding your Google client_secrets.json.';
+  document.getElementById('youtube-output').textContent = JSON.stringify(data, null, 2);
+}
+
+async function publishVideo() {
+  if (!currentProjectId) return;
+  if (!document.getElementById('youtube-confirm').checked) {
+    alert('Tick the per-run upload confirmation after reviewing the final video.');
+    return;
+  }
+  const approver = document.getElementById('reviewer-name').value.trim();
+  const payload = {
+    privacy_status: document.getElementById('youtube-privacy').value,
+    approver,
+    confirm_publish: true
+  };
+  if (payload.privacy_status === 'public' && !window.confirm('This will publish the video publicly. Continue?')) return;
+  const res = await fetch(`/api/projects/${currentProjectId}/publish`, {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+  });
+  const data = await res.json();
+  document.getElementById('youtube-output').textContent = JSON.stringify(data, null, 2);
+  if (!res.ok) alert('Upload not completed: ' + (data.detail || 'Review release gates.'));
 }
 
 async function createLanguageOutput() {
@@ -1175,6 +1221,97 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
     def backup_project(project_id: str) -> dict:
         bkp_path = mgr.backup_project(project_id, resolved_projects.parent / "backups")
         return {"backup_path": str(bkp_path)}
+
+    @app.get("/api/youtube/status")
+    def youtube_oauth_status() -> dict:
+        return YouTubePublisher().get_oauth_status()
+
+    @app.post("/api/projects/{project_id}/publish")
+    def publish_approved_project(
+        project_id: str, payload: YouTubePublishRequest
+    ) -> dict:
+        if not payload.confirm_publish:
+            raise HTTPException(
+                status_code=409,
+                detail="Explicit per-run publication confirmation is required.",
+            )
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if proj.status != ProjectStatus.APPROVED:
+            raise HTTPException(
+                status_code=409,
+                detail="Project must have current final human approval before upload.",
+            )
+
+        project_dir = Path(proj.root_dir)
+        storyboard_path = project_dir / "storyboard" / "storyboard.json"
+        final_video = project_dir / "render" / "final" / "final_video.mp4"
+        review_path = project_dir / "qa" / "manual_review.json"
+        if not storyboard_path.is_file() or not final_video.is_file() or not review_path.is_file():
+            raise HTTPException(status_code=409, detail="Final video, storyboard or manual review is missing.")
+        try:
+            scenes = [
+                SceneSpec.model_validate(item)
+                for item in json.loads(storyboard_path.read_text(encoding="utf-8"))
+            ]
+            review = json.loads(review_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, json.JSONDecodeError) as exc:
+            raise HTTPException(status_code=409, detail=f"Release files cannot be validated: {exc}") from exc
+
+        auditor = TenGateAuditor(conn, project_dir)
+        current_fingerprint = auditor.review_fingerprint(project_id, scenes, final_video)
+        if review.get("artifact_fingerprint") != current_fingerprint:
+            mgr.update_status(project_id, ProjectStatus.NEEDS_REVIEW)
+            raise HTTPException(
+                status_code=409,
+                detail="Manual review is stale because reviewed artifacts or evidence changed. Review the current outputs again.",
+            )
+        report = auditor.run_ten_gates(
+            project_id, scenes, final_video, human_approved_by=payload.approver
+        )
+        if report.get("ready_for_publication") != "PASSED":
+            mgr.update_status(project_id, ProjectStatus.NEEDS_REVIEW)
+            blockers = [
+                f"{name}={status}" for name, status in report.get("gates", {}).items()
+                if status != "PASSED"
+            ]
+            raise HTTPException(
+                status_code=409,
+                detail="Publication QA is not ready: " + (", ".join(blockers) or "review requirements remain pending"),
+            )
+
+        publisher = YouTubePublisher()
+        metadata = {
+            "video_title": proj.chapter_title[:100],
+            "description": (
+                f"{proj.content_category.replace('_', ' ').title()} educational documentary. "
+                f"Research cutoff: {proj.cutoff_date}. Human-reviewed before upload."
+            ),
+            "tags": ["Education", "Learning", proj.content_category.replace("_", " ")],
+            "chapters": report.get("chapters", []),
+        }
+        result = publisher.upload_video(
+            final_video,
+            metadata=metadata,
+            qa_passed=True,
+            privacy_status=payload.privacy_status,
+            human_approved_by=payload.approver,
+        )
+        receipt = {
+            "project_id": project_id,
+            "requested_by": payload.approver,
+            "requested_privacy": payload.privacy_status,
+            "confirmed_this_run": payload.confirm_publish,
+            "requested_at": utc_now_iso(),
+            "qa_status": report.get("ready_for_publication"),
+            "upload_result": result,
+        }
+        receipt_path = project_dir / "publishing" / "youtube_upload_receipt.json"
+        receipt_path.parent.mkdir(parents=True, exist_ok=True)
+        receipt_path.write_text(json.dumps(receipt, indent=2, ensure_ascii=False), encoding="utf-8")
+        return receipt
 
     @app.post("/api/projects/{project_id}/approve")
     def approve_project(project_id: str, approver: str = "User") -> dict:
