@@ -272,7 +272,7 @@ class StagedChapterPipeline:
             if not capabilities.get("can_synthesize_hindi", False):
                 return self._waiting_for_voice(
                     project_id, project_dir, paths, scenes,
-                    "No supported Hindi Piper model or installed Windows SAPI Hindi voice was detected.",
+                    "No Hindi Piper model or installed Windows SAPI Hindi voice was detected.",
                     capabilities,
                 )
             audio = tts.synthesize_scenes(project_id, scenes)
