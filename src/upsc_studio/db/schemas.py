@@ -143,6 +143,12 @@ class ClaimVerificationRequest(BaseModel):
     ref_period: str | None = Field(default=None, max_length=100)
 
 
+class ManualRetryRequest(BaseModel):
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    reason: str = Field(..., min_length=5, max_length=1000)
+    partial_outputs_inspected: bool = False
+
+
 class ManualQAReview(BaseModel):
     """Explicit creator checklist for quality items automation cannot certify."""
 
