@@ -462,6 +462,7 @@ class StagedChapterPipeline:
         return {
             "project_id": project_id, "status": final_status,
             "specialist_profile": teaching.get("specialist_key"),
+            "content_readiness": teaching.get("teaching_summary", {}).get("content_readiness", "UNKNOWN"),
             "matched_pyqs": teaching.get("matched_pyqs", 0),
             "duration_schedule": render.get("duration_schedule") or teaching.get("duration_schedule"),
             "publishing_package": visuals.get("publishing_package"),
