@@ -320,9 +320,19 @@ class StagedChapterPipeline:
         ten_gates = TenGateAuditor(self.conn, project_dir).run_ten_gates(
             project_id, scenes, final_video,
         )
+        all_ten_gates_passed = (
+            ten_gates.get("all_gates_passed") is True
+            and not ten_gates.get("failed_gates")
+            and not ten_gates.get("pending_gates")
+        )
         final_status = (
             ProjectStatus.NEEDS_REVIEW
-            if qa["academic"]["status"] != "PASSED" or qa["media"]["status"] != "PASSED"
+            if (
+                qa["academic"]["status"] != "PASSED"
+                or qa["rights"]["status"] != "PASSED"
+                or qa["media"]["status"] != "PASSED"
+                or not all_ten_gates_passed
+            )
             else ProjectStatus.APPROVED
         )
         self.project_mgr.update_status(project_id, final_status)
