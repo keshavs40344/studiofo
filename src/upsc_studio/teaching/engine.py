@@ -67,7 +67,7 @@ class TeachingEngine:
         estimated_minutes = round(total_words / self.WORDS_PER_MINUTE, 2)
 
         # 1. teaching_outline.md
-        outline_lines = [f"# Teaching Outline — {chapter_title}", "", f"**Papers:** {primary_papers}", ""]
+        outline_lines = [f"# Teaching Outline — {chapter_title}", "", f"**Category / Syllabus Context:** {primary_papers}", ""]
         for idx, sec in enumerate(sections, start=1):
             outline_lines.append(f"{idx}. **{sec['title']}** — {sec['objective']} (~{sec['duration_sec']}s)")
         (self.teaching_dir / "teaching_outline.md").write_text("\n".join(outline_lines), encoding="utf-8")
@@ -203,7 +203,7 @@ class TeachingEngine:
                 [
                     f"# Detailed Study Notes — {chapter_title}",
                     "",
-                    f"**Mapped Papers:** {primary_papers}",
+                    f"**Category / Syllabus Context:** {primary_papers}",
                     "",
                     *[f"### {s['title']}\n\n{s['narration']}\n" for s in sections],
                 ]
@@ -338,7 +338,7 @@ class TeachingEngine:
                     f"Namaste aur swagat hai UPSC Studio mein. Aaj hum '{chapter_title}' ko "
                     "source-led tareeke se samjhenge. Is script mein factual statements wahi honge "
                     "jo project evidence ledger mein VERIFIED mark kiye gaye hain. "
-                    f"Current syllabus mapping: {primary_papers}. Is mapping ko bhi final use se pehle review karein."
+                    f"Project scope/category: {primary_papers}. Formal syllabus alignment, where applicable, must be reviewed separately."
                 ),
             },
             {
