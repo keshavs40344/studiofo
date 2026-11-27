@@ -9,6 +9,8 @@ import subprocess
 import wave
 from pathlib import Path
 
+from upsc_studio.audio.quality import AudioQualityInspector
+from upsc_studio.audio.subtitles import SubtitleEngine
 from upsc_studio.core.hardware import find_ffmpeg
 from upsc_studio.db.schemas import RightsStatus, SceneSpec
 from upsc_studio.graphics.rights import AssetRightsLedger
@@ -68,12 +70,14 @@ class VoiceAudioProcessor:
         subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
 
         metrics = self._measure_audio(ffmpeg_exe, clean_wav)
+        quality_diag = AudioQualityInspector.inspect_wav(clean_wav).to_dict()
         report = {
             "raw_file": str(raw_copy),
             "processed_file": str(clean_wav),
             "tts_used": False,
             "voice_cloning_used": False,
             **metrics,
+            "quality_diagnostics": quality_diag,
         }
         (self.proc_dir / "audio_qa.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
         return report
