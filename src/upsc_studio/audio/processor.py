@@ -153,7 +153,11 @@ class VoiceAudioProcessor:
         srt_path = Path(output_path) if output_path is not None else self.sub_dir / "subtitles.srt"
         srt_path.parent.mkdir(parents=True, exist_ok=True)
         srt_path.write_text("\n".join(srt_blocks), encoding="utf-8")
-        transcript_path = srt_path.with_suffix(".transcript.json")
+        transcript_path = (
+            self.sub_dir / "transcript.json"
+            if output_path is None
+            else srt_path.with_suffix(".transcript.json")
+        )
         transcript_path.write_text(
             json.dumps(transcript_segments, indent=2, ensure_ascii=False), encoding="utf-8"
         )
