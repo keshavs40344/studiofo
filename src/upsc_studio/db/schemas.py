@@ -120,6 +120,7 @@ class ManualQAReview(BaseModel):
     """Explicit creator checklist for quality items automation cannot certify."""
 
     reviewer: str = Field(..., min_length=2, max_length=120)
+    content_scope_coverage: bool = False
     teaching_clarity: bool = False
     visual_relevance: bool = False
     voice_subtitle_alignment: bool = False
