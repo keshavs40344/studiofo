@@ -7,6 +7,7 @@ import textwrap
 from pathlib import Path
 
 from upsc_studio.db.schemas import RightsStatus, SceneSpec
+from upsc_studio.storyboard.visual_director import VisualDirectionEngine
 
 
 class StoryboardDirector:
@@ -22,6 +23,8 @@ class StoryboardDirector:
         scenes: list[SceneSpec] = []
         graphics_specs: list[dict] = []
         transitions: list[dict] = []
+        visual_plan: list[dict] = []
+        director_engine = VisualDirectionEngine()
 
         for idx, sec in enumerate(sections, start=1):
             scene_id = f"SCN_{idx:02d}"
@@ -29,6 +32,16 @@ class StoryboardDirector:
             trans_in = "fade_in" if idx == 1 else "cross_dissolve"
             trans_out = "dip_to_black" if idx == len(sections) else "hard_cut"
             anim = "zoom_in" if idx == 1 else ("step_reveal" if "Flowchart" in sec["visual_category"] else "fade_in")
+
+            decision = director_engine.determine_visual(
+                scene_id=scene_id,
+                section_id=sec["section_id"],
+                title=sec["title"],
+                objective=sec.get("objective", ""),
+                narration=sec.get("narration", ""),
+                visual_category=sec.get("visual_category", ""),
+            )
+            visual_plan.append(decision.to_dict())
 
             scene = SceneSpec(
                 scene_id=scene_id,
@@ -49,12 +62,18 @@ class StoryboardDirector:
                 audio_cue="narration_only" if idx > 1 else "intro_soft_ducked",
                 source_citations=[f"Claim {cid}" for cid in sec.get("claim_ids", [])] or ["Conceptual Framework"],
                 qc_status="PENDING",
+                metadata={
+                    "visual_type": decision.visual_type.value,
+                    "teaching_rationale": decision.rationale,
+                    "recommended_animation": decision.recommended_animation,
+                },
             )
             scenes.append(scene)
             graphics_specs.append(
                 {
                     "scene_id": scene_id,
                     "visual_category": sec["visual_category"],
+                    "visual_type": decision.visual_type.value,
                     "title": sec["title"],
                     "subtitle": chapter_title,
                     "bullets": bullets,
@@ -73,6 +92,10 @@ class StoryboardDirector:
 
         (self.storyboard_dir / "storyboard.json").write_text(
             json.dumps([s.model_dump() for s in scenes], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (self.storyboard_dir / "visual_direction_plan.json").write_text(
+            json.dumps(visual_plan, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         (self.storyboard_dir / "graphics_spec.json").write_text(
