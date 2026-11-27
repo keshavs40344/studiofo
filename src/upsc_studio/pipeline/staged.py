@@ -435,8 +435,13 @@ class StagedChapterPipeline:
             final_status = ProjectStatus.FAILED.value
         else:
             final_status = ProjectStatus.PROCESSING.value
-        if final_status == ProjectStatus.FAILED.value:
-            self.project_mgr.update_status(project_id, ProjectStatus.FAILED)
+        if final_status in {
+            ProjectStatus.WAITING_FOR_VOICE.value,
+            ProjectStatus.APPROVED.value,
+            ProjectStatus.NEEDS_REVIEW.value,
+            ProjectStatus.FAILED.value,
+        }:
+            self.project_mgr.update_status(project_id, ProjectStatus(final_status))
 
         stage_rows = []
         for row in workflow.get("tasks", []):
