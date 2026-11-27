@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from urllib.parse import urlparse
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -13,10 +14,10 @@ from fastapi.responses import FileResponse, HTMLResponse
 from upsc_studio.core.hardware import detect_hardware
 from upsc_studio.core.paths import DEFAULT_DB_PATH, DEFAULT_PROJECTS_DIR
 from upsc_studio.db.database import init_db
-from upsc_studio.db.schemas import ManualQAReview, ProjectCreate, ProjectStatus, SceneSpec, utc_now_iso
+from upsc_studio.db.schemas import (\n    ClaimVerificationRequest, ManualQAReview, ProjectCreate, ProjectStatus,\n    ResearchClaimCreate, ResearchSourceCreate, SceneSpec, VerificationStatus, utc_now_iso,\n)
 from upsc_studio.agents.supervisor import ExecutiveProducer
 from upsc_studio.projects.manager import ProjectManager
-from upsc_studio.qa.ten_gates import TenGateAuditor
+from upsc_studio.qa.ten_gates import TenGateAuditor\nfrom upsc_studio.research.verifier import EvidenceEngine
 
 DASHBOARD_HTML = """<!DOCTYPE html>
 <html lang="en">
@@ -368,6 +369,119 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             allow_youtube_upload=False,
             human_publish_approval=False,
         )
+
+    @app.get("/api/projects/{project_id}/research")
+    def get_research_ledger(project_id: str) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        sources = [
+            dict(row) for row in conn.execute(
+                "SELECT * FROM sources WHERE project_id = ? ORDER BY id", (project_id,)
+            ).fetchall()
+        ]
+        claims = [
+            dict(row) for row in conn.execute(
+                """
+                SELECT c.*, s.title AS source_title, s.url AS source_url,
+                       s.source_tier AS source_tier
+                FROM claims AS c
+                LEFT JOIN sources AS s ON s.id = c.source_id
+                WHERE c.project_id = ? ORDER BY c.id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        return {"project_id": proj.id, "content_category": proj.content_category,
+                "sources": sources, "claims": claims}
+
+    @app.post("/api/projects/{project_id}/sources")
+    def create_research_source(project_id: str, payload: ResearchSourceCreate) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        parsed = urlparse(payload.url)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise HTTPException(status_code=422, detail="Research source URL must use http or https.")
+        source_id = EvidenceEngine(conn, Path(proj.root_dir)).add_source(
+            project_id=project_id,
+            title=payload.title,
+            publisher=payload.publisher,
+            source_tier=payload.source_tier,
+            url=payload.url,
+            pub_date=payload.pub_date,
+            notes=payload.notes,
+        )
+        return {"source_id": source_id, "status": "SOURCE_REGISTERED"}
+
+    @app.post("/api/projects/{project_id}/claims")
+    def create_research_claim(project_id: str, payload: ResearchClaimCreate) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        if payload.source_id:
+            source = conn.execute(
+                "SELECT id FROM sources WHERE id = ? AND project_id = ?",
+                (payload.source_id, project_id),
+            ).fetchone()
+            if source is None:
+                raise HTTPException(status_code=404, detail="Source does not belong to this project.")
+        evidence = EvidenceEngine(conn, Path(proj.root_dir))
+        claim_id = evidence.add_claim(
+            project_id=project_id,
+            statement=payload.statement,
+            chapter_section=payload.chapter_section,
+            status=(
+                VerificationStatus.HUMAN_REVIEW_REQUIRED
+                if payload.source_id else VerificationStatus.UNSUPPORTED
+            ),
+            source_id=payload.source_id,
+            page_or_section=payload.page_or_section,
+            ref_period=payload.ref_period,
+            verification_notes="Manually entered; requires review against the cited source.",
+        )
+        return {"claim_id": claim_id, "status": "HUMAN_REVIEW_REQUIRED"}
+
+    @app.post("/api/projects/{project_id}/claims/{claim_id}/verify")
+    def verify_research_claim(
+        project_id: str, claim_id: str, payload: ClaimVerificationRequest
+    ) -> dict:
+        try:
+            proj = mgr.get_project(project_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        claim = conn.execute(
+            "SELECT id FROM claims WHERE id = ? AND project_id = ?",
+            (claim_id, project_id),
+        ).fetchone()
+        source = conn.execute(
+            "SELECT id FROM sources WHERE id = ? AND project_id = ?",
+            (payload.source_id, project_id),
+        ).fetchone()
+        if claim is None:
+            raise HTTPException(status_code=404, detail="Claim not found in this project.")
+        if source is None:
+            raise HTTPException(status_code=404, detail="Source not found in this project.")
+        try:
+            EvidenceEngine(conn, Path(proj.root_dir)).verify_claim_against_source(
+                claim_id=claim_id,
+                source_id=payload.source_id,
+                page_or_section=payload.page_or_section,
+                evidence_excerpt=payload.evidence_excerpt,
+                ref_period=payload.ref_period,
+                reviewer=payload.reviewer,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {
+            "claim_id": claim_id,
+            "status": VerificationStatus.VERIFIED.value,
+            "verification_method": "HUMAN_ATTESTED_SOURCE_EXCERPT",
+            "limitation": "The system records the reviewer attestation; it does not independently prove semantic support.",
+        }
 
     @app.post("/api/projects/{project_id}/review")
     def save_manual_review(project_id: str, payload: ManualQAReview) -> dict:
