@@ -17,7 +17,7 @@ def test_attestation_endpoint_requires_excerpt_and_project_scope(tmp_path):
     project = manager.create_project(
         ProjectCreate(name="Attestation API", chapter_title="Article 32")
     )
-    engine = EvidenceEngine(conn, projects_root / project.slug)
+    engine = EvidenceEngine(conn, Path(project.root_dir))
     source_id = engine.add_source(
         project.id, "Constitution of India", "Government of India", "PRIMARY_OFFICIAL"
     )
@@ -51,7 +51,7 @@ def test_attestation_endpoint_rejects_missing_or_cross_project_claim(tmp_path):
     manager = ProjectManager(conn, projects_root)
     first = manager.create_project(ProjectCreate(name="First Project", chapter_title="Article 32"))
     second = manager.create_project(ProjectCreate(name="Second Project", chapter_title="Article 14"))
-    engine = EvidenceEngine(conn, projects_root / first.slug)
+    engine = EvidenceEngine(conn, Path(first.root_dir))
     source_id = engine.add_source(first.id, "Constitution", "Government of India", "PRIMARY_OFFICIAL")
     claim_id = engine.add_claim(first.id, "Article 32 provides a constitutional remedy.", "Remedies")
 
