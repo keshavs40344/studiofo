@@ -159,26 +159,44 @@ class EvidenceEngine:
         page_or_section: str,
         evidence_excerpt: str,
         ref_period: Optional[str] = None,
+        reviewer_id: Optional[str] = None,
     ) -> bool:
-        """Verify an atomic claim against a registered source with excerpt proof."""
+        """Record an explicit human attestation; this method does not infer semantic support.
+
+        The reviewer must inspect the original source and affirm that the supplied excerpt
+        supports the claim. URL reachability, a source ID, and a page reference alone are
+        never sufficient to mark a claim VERIFIED.
+        """
+        if not reviewer_id or not reviewer_id.strip():
+            raise ValueError("A non-empty reviewer_id is required for human evidence attestation.")
+        if not page_or_section or len(page_or_section.strip()) < 2:
+            raise ValueError("A specific page, section, or paragraph reference is required.")
+        if not evidence_excerpt or len(evidence_excerpt.strip()) < 10:
+            raise ValueError("Evidence excerpt too brief or missing; cannot record human attestation.")
+
         src_row = self.conn.execute("SELECT * FROM sources WHERE id = ?", (source_id,)).fetchone()
         if not src_row:
             raise ValueError(f"Source ID '{source_id}' does not exist.")
+        claim_row = self.conn.execute("SELECT * FROM claims WHERE id = ?", (claim_id,)).fetchone()
+        if not claim_row:
+            raise ValueError(f"Claim ID '{claim_id}' does not exist.")
+        if claim_row["project_id"] != src_row["project_id"]:
+            raise ValueError("Claim and source must belong to the same project.")
 
-        # Ensure excerpt exists and supports claim
-        if not evidence_excerpt or len(evidence_excerpt.strip()) < 10:
-            raise ValueError("Evidence excerpt too brief or missing; cannot establish verification.")
-
-        tier = src_row["source_tier"]
-        notes = f"Verified against {tier} ({src_row['title']}). Excerpt: {evidence_excerpt[:100]}..."
-
+        excerpt = evidence_excerpt.strip()
+        notes = (
+            f"HUMAN_ATTESTED_BY:{reviewer_id.strip()}\\n"
+            f"Source: {src_row['title']} ({src_row['source_tier']})\\n"
+            f"Page or section: {page_or_section.strip()}\\n"
+            f"Evidence excerpt: {excerpt}"
+        )
         self.conn.execute(
             """
             UPDATE claims
             SET status = ?, source_id = ?, page_or_section = ?, ref_period = ?, verification_notes = ?
             WHERE id = ?
             """,
-            (VerificationStatus.VERIFIED.value, source_id, page_or_section, ref_period, notes, claim_id),
+            (VerificationStatus.VERIFIED.value, source_id, page_or_section.strip(), ref_period, notes, claim_id),
         )
         self.conn.commit()
         return True
