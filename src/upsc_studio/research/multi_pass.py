@@ -212,7 +212,7 @@ class MultiPassResearchWorkflow:
 
             # Persist status to SQLite
             db_status = "VERIFIED" if is_safe else ("HUMAN_REVIEW_REQUIRED" if status == MultiPassStatus.REVIEW_REQUIRED else "UNSUPPORTED")
-            notes_str = (v_notes + "\\n" if v_notes else "") + f"[{status.value}] " + ("; ".join(reasons) if reasons else "Human-attested evidence retained.")
+            notes_str = (v_notes + "\n" if v_notes else "") + f"[{status.value}] " + ("; ".join(reasons) if reasons else "Human-attested evidence retained.")
             self.conn.execute(
                 "UPDATE claims SET status = ?, verification_notes = ? WHERE id = ?",
                 (db_status, notes_str, c["id"]),
