@@ -24,9 +24,9 @@ from upsc_studio.publishing.youtube_publisher import YouTubePublisher
 class ExecutiveProducer:
     """Runs real production stages through the persistent SQLite task scheduler.
 
-    Registry roles remain REGISTERED unless an independently attributable handler
-    actually runs. Pipeline-internal work is not falsely attributed to 24 separate
-    agents until the pipeline has been decomposed into specialist handlers.
+    The pipeline runs seven independently persisted production-stage handlers.
+    Registry roles remain REGISTERED unless that exact specialist handler executes;
+    stage tasks are not automatically counted as 24 independent specialist agents.
     """
 
     def __init__(self, conn: sqlite3.Connection, projects_root: Path) -> None:
