@@ -98,6 +98,7 @@ class ExecutiveProducer:
         typed_notes: str,
         voice_path: Path | None,
         ai_narration: bool,
+        manual_review_path: Path | None = None,
     ) -> str:
         """Hash inputs without storing their text or media bytes in the task payload."""
         inputs: dict[str, Any] = {
@@ -106,6 +107,11 @@ class ExecutiveProducer:
             "ai_narration": bool(ai_narration),
             "notes_files": [],
             "voice": None,
+            "manual_review_sha256": (
+                sha256_file(manual_review_path)
+                if manual_review_path is not None and Path(manual_review_path).is_file()
+                else None
+            ),
         }
         for path in notes_files or []:
             resolved = Path(path).expanduser().resolve()
@@ -148,8 +154,10 @@ class ExecutiveProducer:
 
         resolved_notes = [Path(item).expanduser().resolve() for item in (notes_files or [])]
         resolved_voice = Path(voice_path).expanduser().resolve() if voice_path is not None else None
+        manual_review_path = project_dir / "qa" / "manual_review.json"
         fingerprint = self._input_fingerprint(
-            project_id, resolved_notes, typed_notes, resolved_voice, ai_narration
+            project_id, resolved_notes, typed_notes, resolved_voice, ai_narration,
+            manual_review_path,
         )
         workflow_id = f"production:{project_id}:{fingerprint[:24]}"
         context: dict[str, Any] = {}
