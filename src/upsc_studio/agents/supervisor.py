@@ -201,6 +201,7 @@ class ExecutiveProducer:
                 "duration_schedule": result.get("duration_schedule"),
                 "matched_pyqs": result.get("matched_pyqs", 0),
                 "specialist_profile": result.get("specialist_profile"),
+                "content_readiness": result.get("content_readiness", "UNKNOWN"),
                 "voice_wait_reason": result.get("voice_wait_reason"),
                 "voice_capabilities": result.get("voice_capabilities"),
                 "pipeline_stages": result.get("pipeline_stages", {}),
