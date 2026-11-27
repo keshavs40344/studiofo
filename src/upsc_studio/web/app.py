@@ -92,6 +92,87 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
     </div>
   </div>
+
+  <div style="max-width:1400px;margin:24px auto;">
+    <div class="card" style="background:#1e293b;border:1px solid #3b82f6;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;">
+        <h2 style="color:#38bdf8;margin:0;">Channel Knowledge Catalogue & Content Gap Auditor</h2>
+        <button class="secondary" onclick="loadCatalogue()">Refresh Catalogue</button>
+      </div>
+      <p style="color:#94a3b8;font-size:13px;margin:8px 0 16px;">
+        Complete official UPSC CSE syllabus-to-video coverage graph. Tracks video lifecycle from research to publication with strict quality gate enforcement.
+      </p>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));gap:12px;margin-bottom:16px;" id="cat-stats-cards">
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#f8fafc;" id="stat-total">-</div><div style="font-size:12px;color:#94a3b8;">Total Syllabus Topics</div></div>
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#38bdf8;" id="stat-researched">-</div><div style="font-size:12px;color:#94a3b8;">Research Verified</div></div>
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#a855f7;" id="stat-scripts">-</div><div style="font-size:12px;color:#94a3b8;">Scripts Ready</div></div>
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#f59e0b;" id="stat-rendered">-</div><div style="font-size:12px;color:#94a3b8;">Videos Rendered</div></div>
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#10b981;" id="stat-published">-</div><div style="font-size:12px;color:#94a3b8;">Published Videos</div></div>
+        <div class="card" style="background:#0f172a;text-align:center;"><div style="font-size:24px;font-weight:700;color:#ef4444;" id="stat-missing">-</div><div style="font-size:12px;color:#94a3b8;">Missing Topics</div></div>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <label>Filter by Paper</label>
+          <select id="cat-filter-paper" onchange="filterCatalogue()">
+            <option value="">All Papers</option>
+            <option value="Mains GS Paper II">Mains GS Paper II (Polity & Constitution)</option>
+            <option value="Mains GS Paper I">Mains GS Paper I (History, Geog, Society)</option>
+            <option value="Mains GS Paper III">Mains GS Paper III (Economy, Env, S&T)</option>
+            <option value="Mains GS Paper IV">Mains GS Paper IV (Ethics & Probity)</option>
+            <option value="Prelims GS Paper I">Prelims GS Paper I</option>
+            <option value="Prelims CSAT Paper II">Prelims CSAT Paper II</option>
+            <option value="Mains Essay">Mains Essay</option>
+            <option value="Optional Paper I & II">Optional Subjects</option>
+            <option value="Interview / Personality Test">Interview Preparation</option>
+            <option value="Current Affairs">Current Affairs</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <label>Filter by Status</label>
+          <select id="cat-filter-status" onchange="filterCatalogue()">
+            <option value="">All Statuses</option>
+            <option value="NOT_PLANNED">NOT_PLANNED</option>
+            <option value="RESEARCH_VERIFIED">RESEARCH_VERIFIED</option>
+            <option value="SCRIPT_READY">SCRIPT_READY</option>
+            <option value="VIDEO_RENDERED">VIDEO_RENDERED</option>
+            <option value="QA_PASSED">QA_PASSED</option>
+            <option value="PUBLISHED">PUBLISHED</option>
+            <option value="NEEDS_REVISION">NEEDS_REVISION</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:left;">
+          <thead>
+            <tr style="border-bottom:2px solid #475569;color:#cbd5e1;">
+              <th style="padding:8px;">Node ID</th>
+              <th style="padding:8px;">Paper & Subject</th>
+              <th style="padding:8px;">Major Topic</th>
+              <th style="padding:8px;">Microtopic & Depth</th>
+              <th style="padding:8px;">Status</th>
+              <th style="padding:8px;">Video URL / Actions</th>
+            </tr>
+          </thead>
+          <tbody id="catalogue-table-body">
+            <tr><td colspan="6" style="padding:12px;text-align:center;color:#94a3b8;">Loading knowledge catalogue...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid #475569;">
+        <h3 style="color:#f59e0b;">Channel Content Gap Auditor</h3>
+        <p style="font-size:12px;color:#94a3b8;">Scan YouTube channel video inventory against syllabus graph to identify missing topics and generate upgrade plans without duplication.</p>
+        <div style="display:flex;gap:12px;margin-bottom:8px;">
+          <input id="audit-channel-url" placeholder="https://www.youtube.com/@UPSCStudioChannel" style="flex:2;" />
+          <button onclick="runChannelGapAudit()">Run Content Gap Audit</button>
+        </div>
+        <pre id="audit-output" style="max-height:220px;display:none;">Ready to audit.</pre>
+      </div>
+    </div>
+  </div>
 <script>
 let currentProjectId = null;
 
@@ -190,8 +271,75 @@ function openYouTubeStudio() {
   window.open('https://studio.youtube.com', '_blank');
 }
 
+async function loadCatalogue() {
+  try {
+    const summaryRes = await fetch('/api/catalogue/summary');
+    const summary = await summaryRes.json();
+    document.getElementById('stat-total').textContent = summary.total_entries;
+    document.getElementById('stat-researched').textContent = summary.topics_researched;
+    document.getElementById('stat-scripts').textContent = summary.topics_with_scripts;
+    document.getElementById('stat-rendered').textContent = summary.topics_with_videos;
+    document.getElementById('stat-published').textContent = summary.topics_published;
+    document.getElementById('stat-missing').textContent = summary.topics_missing_count;
+  } catch (err) {
+    console.error('Failed to load catalogue summary', err);
+  }
+  await filterCatalogue();
+}
+
+async function filterCatalogue() {
+  const paper = document.getElementById('cat-filter-paper').value;
+  const status = document.getElementById('cat-filter-status').value;
+  const params = new URLSearchParams();
+  if (paper) params.append('paper', paper);
+  if (status) params.append('status', status);
+
+  try {
+    const res = await fetch('/api/catalogue/topics?' + params.toString());
+    const topics = await res.json();
+    const tbody = document.getElementById('catalogue-table-body');
+    if (!topics.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="padding:12px;text-align:center;color:#94a3b8;">No topics match the selected filters.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = topics.map(t => `
+      <tr style="border-bottom:1px solid #334155;">
+        <td style="padding:8px;font-family:monospace;color:#38bdf8;">${t.node_id}</td>
+        <td style="padding:8px;">${t.paper}<br/><small style="color:#94a3b8;">${t.subject}</small></td>
+        <td style="padding:8px;font-weight:600;">${t.major_topic}</td>
+        <td style="padding:8px;">${t.microtopic}<br/><span class="badge" style="background:#1e293b;color:#a855f7;">${t.required_depth}</span></td>
+        <td style="padding:8px;"><span class="badge ${t.catalogue_status}">${t.catalogue_status}</span></td>
+        <td style="padding:8px;">${t.published_video_url ? `<a href="${t.published_video_url}" target="_blank" style="color:#38bdf8;text-decoration:none;">Watch Video ↗</a>` : '<span style="color:#64748b;">Not Published</span>'}</td>
+      </tr>
+    `).join('');
+  } catch (err) {
+    console.error('Failed to filter catalogue', err);
+  }
+}
+
+async function runChannelGapAudit() {
+  const channelUrl = document.getElementById('audit-channel-url').value || 'https://www.youtube.com/@UPSCStudio';
+  const outEl = document.getElementById('audit-output');
+  outEl.style.display = 'block';
+  outEl.textContent = 'Auditing accessible channel video inventory against syllabus knowledge graph...';
+
+  try {
+    const res = await fetch('/api/catalogue/audit_gap', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({channel_url: channelUrl})
+    });
+    const report = await res.json();
+    outEl.textContent = JSON.stringify(report, null, 2);
+    await loadCatalogue();
+  } catch (err) {
+    outEl.textContent = 'Error running gap audit: ' + err.message;
+  }
+}
+
 loadHardware();
 loadProjects();
+loadCatalogue();
 </script>
 </body>
 </html>"""
@@ -332,5 +480,75 @@ def create_app(db_path: Path | None = None, projects_root: Path | None = None) -
             target_languages=list(CORE_16_LANGUAGES.keys()),
             primary_video_path=proj_dir / "render" / "final" / "final_video.mp4",
         )
+
+    # -------------------------------------------------------------
+    # PHASE 19: KNOWLEDGE GRAPH, CATALOGUE & GAP AUDITOR ENDPOINTS
+    # -------------------------------------------------------------
+    from upsc_studio.syllabus.knowledge_graph import KnowledgeGraph
+    from upsc_studio.syllabus.knowledge_catalogue import KnowledgeCatalogue, CatalogueStatus
+    from upsc_studio.publishing.channel_gap_auditor import ChannelGapAuditor, ChannelVideoItem
+
+    knowledge_graph = KnowledgeGraph()
+    knowledge_catalogue = KnowledgeCatalogue(conn, knowledge_graph)
+    gap_auditor = ChannelGapAuditor(knowledge_graph, knowledge_catalogue)
+
+    @app.get("/api/knowledge_graph")
+    def get_knowledge_graph() -> dict:
+        return {
+            "breakdown": knowledge_graph.get_coverage_breakdown(),
+            "nodes": [n.to_dict() for n in knowledge_graph.nodes.values()],
+        }
+
+    @app.get("/api/catalogue/summary")
+    def get_catalogue_summary() -> dict:
+        return knowledge_catalogue.get_catalogue_summary()
+
+    @app.get("/api/catalogue/topics")
+    def get_catalogue_topics(
+        paper: str | None = None,
+        subject: str | None = None,
+        status: str | None = None,
+    ) -> list[dict]:
+        stat_enum = CatalogueStatus(status) if status else None
+        return knowledge_catalogue.list_topic_details(paper=paper, subject=subject, status=stat_enum)
+
+    @app.post("/api/catalogue/update_status")
+    def update_catalogue_status(payload: dict) -> dict:
+        node_id = payload.get("node_id")
+        status_str = payload.get("status")
+        if not node_id or not status_str:
+            raise HTTPException(status_code=400, detail="node_id and status required.")
+        try:
+            entry = knowledge_catalogue.update_status(
+                node_id=node_id,
+                new_status=CatalogueStatus(status_str),
+                project_id=payload.get("project_id"),
+                published_video_url=payload.get("published_video_url"),
+                qa_report_id=payload.get("qa_report_id"),
+                qa_passed=payload.get("qa_passed", False),
+                notes=payload.get("notes", ""),
+            )
+            return entry.to_dict()
+        except (ValueError, KeyError) as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/api/catalogue/audit_gap")
+    def run_channel_gap_audit(payload: dict) -> dict:
+        channel_url = payload.get("channel_url", "https://www.youtube.com/@UPSCStudio")
+        custom_videos = payload.get("videos", [])
+        video_items = [
+            ChannelVideoItem(
+                video_id=v.get("video_id", f"vid_{i}"),
+                title=v.get("title", ""),
+                description=v.get("description", ""),
+                published_date=v.get("published_date", "2026-01-01"),
+                url=v.get("url", ""),
+                transcript=v.get("transcript", ""),
+                duration_sec=v.get("duration_sec", 600),
+            )
+            for i, v in enumerate(custom_videos)
+        ]
+        report = gap_auditor.audit_channel_videos(channel_url=channel_url, videos=video_items)
+        return report.to_dict()
 
     return app

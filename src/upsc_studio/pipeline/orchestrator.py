@@ -27,6 +27,8 @@ from upsc_studio.storyboard.director import StoryboardDirector
 from upsc_studio.syllabus.engine import SyllabusEngine
 from upsc_studio.teaching.duration_planner import DurationPlanner
 from upsc_studio.teaching.engine import TeachingEngine
+from upsc_studio.teaching.hinglish_director import HinglishDirector
+from upsc_studio.qa.documentary_quality_gate import DocumentaryQualityGate
 from upsc_studio.tts.adapter import PiperTTSEngine
 from upsc_studio.video.renderer import VideoRenderer
 
@@ -114,6 +116,15 @@ class ChapterPipeline:
             project_dir=project_dir,
             sections=teaching_summary["sections"],
             target_duration_min=project.target_duration_min,
+        )
+
+        # 4B. Hinglish Multi-Track Director (Display, Spoken TTS, and Subtitle synchronised tracks)
+        hinglish_director = HinglishDirector(project_dir)
+        hinglish_pkg = hinglish_director.export_documentary_package(
+            chapter_title=project.chapter_title,
+            project_dir=project_dir,
+            target_duration_min=project.target_duration_min,
+            verified_claims=evidence_ledger.get("claims", []),
         )
 
         # 5. Storyboard, Multi-Modal Documentary Visuals & Publishing Package
@@ -241,9 +252,27 @@ class ChapterPipeline:
         ten_gates = TenGateAuditor(self.conn, project_dir).run_ten_gates(
             project_id, scenes, Path(render_manifest["final_video"])
         )
+        doc_quality_report = DocumentaryQualityGate().evaluate_project(
+            project_id=project_id,
+            project_dir=project_dir,
+            chapter_title=project.chapter_title,
+            verified_claims_count=evidence_ledger["status_counts"].get("VERIFIED", 0),
+            unverified_claims_count=sum(
+                v for k, v in evidence_ledger["status_counts"].items() if k != "VERIFIED"
+            ),
+            rendered_video_path=Path(render_manifest["final_video"]),
+            rendered_audio_path=narration_wav,
+            subtitles_path=srt_path,
+            script_sections_count=len(teaching_summary["sections"]),
+            pyq_count=len(matched_pyqs),
+        )
         final_status = (
             ProjectStatus.NEEDS_REVIEW
-            if qa_report["academic"]["status"] != "PASSED" or qa_report["media"]["status"] != "PASSED"
+            if (
+                qa_report["academic"]["status"] != "PASSED"
+                or qa_report["media"]["status"] != "PASSED"
+                or doc_quality_report.gate_status != "PASSED"
+            )
             else ProjectStatus.APPROVED
         )
         self.project_mgr.update_status(project_id, final_status)
@@ -264,4 +293,5 @@ class ChapterPipeline:
             "render_manifest": render_manifest,
             "qa": qa_report,
             "ten_gates": ten_gates,
+            "documentary_quality": doc_quality_report.to_dict(),
         }
