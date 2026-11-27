@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 from pathlib import Path
@@ -20,6 +21,81 @@ class TenGateAuditor:
         self.project_dir = project_dir
         self.qa_dir = project_dir / "qa"
         self.qa_dir.mkdir(parents=True, exist_ok=True)
+
+    def review_fingerprint(
+        self,
+        project_id: str,
+        scenes: list[SceneSpec],
+        final_mp4: Path | None,
+    ) -> str:
+        """Bind manual review to the exact script, scenes, media, subtitles and research rows."""
+        files: dict[str, Any] = {}
+
+        def add_file(path: Path) -> None:
+            resolved = Path(path)
+            try:
+                label = resolved.resolve().relative_to(self.project_dir.resolve()).as_posix()
+            except ValueError:
+                label = resolved.name
+            if resolved.is_file():
+                digest = hashlib.sha256()
+                with resolved.open("rb") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        digest.update(chunk)
+                files[label] = {"exists": True, "size": resolved.stat().st_size, "sha256": digest.hexdigest()}
+            else:
+                files[label] = {"exists": False}
+
+        for relative in (
+            "teaching/script_hinglish.md",
+            "teaching/teaching_outline.md",
+            "storyboard/storyboard.json",
+            "subtitles/subtitles.srt",
+        ):
+            add_file(self.project_dir / relative)
+        video = final_mp4 or (self.project_dir / "render" / "final" / "final_video.mp4")
+        add_file(video)
+        for folder in (self.project_dir / "audio" / "processed",):
+            if folder.is_dir():
+                for path in sorted(item for item in folder.rglob("*") if item.is_file()):
+                    add_file(path)
+        for scene in scenes:
+            for asset in (scene.primary_asset, scene.supporting_asset):
+                if asset:
+                    add_file(Path(asset))
+
+        claims = [
+            dict(row) for row in self.conn.execute(
+                """
+                SELECT id, statement, source_id, status, verification_notes
+                FROM claims WHERE project_id = ? ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        sources = [
+            dict(row) for row in self.conn.execute(
+                """
+                SELECT id, title, publisher, url, pub_date, source_tier
+                FROM sources WHERE project_id = ? ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        coverage = [
+            dict(row) for row in self.conn.execute(
+                """
+                SELECT syllabus_item_id, status, reason
+                FROM coverage_ledger WHERE project_id = ? ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+        ]
+        canonical = json.dumps(
+            {"files": files, "claims": claims, "sources": sources, "coverage": coverage},
+            sort_keys=True, ensure_ascii=False, default=str,
+        ).encode("utf-8")
+        return hashlib.sha256(canonical).hexdigest()
 
     def run_ten_gates(
         self,
@@ -76,7 +152,9 @@ class TenGateAuditor:
                 manual_review = {}
         manual_checks = manual_review.get("checks", {})
         reviewer = str(manual_review.get("reviewer", "")).strip()
-        has_human_reviewer = len(reviewer) >= 2
+        current_review_fingerprint = self.review_fingerprint(project_id, scenes, final_mp4)
+        review_is_current = manual_review.get("artifact_fingerprint") == current_review_fingerprint
+        has_human_reviewer = len(reviewer) >= 2 and review_is_current
         reviewed = lambda key: has_human_reviewer and manual_checks.get(key) is True
 
         script_path = self.project_dir / "teaching" / "script_hinglish.md"
@@ -149,6 +227,7 @@ class TenGateAuditor:
                 "MANUAL_REVIEW": {
                     "reviewer": reviewer or None,
                     "reviewed_at": manual_review.get("reviewed_at"),
+                    "review_is_current": review_is_current,
                     "checks": {
                         "teaching_clarity": reviewed("teaching_clarity"),
                         "visual_relevance": reviewed("visual_relevance"),
