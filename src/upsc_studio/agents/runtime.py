@@ -175,6 +175,73 @@ class AgentTaskStore:
                 quarantined.append(row["task_id"])
         return quarantined
 
+    def retry_from_handler(
+        self,
+        workflow_id: str,
+        start_handler: str,
+        *,
+        reviewer: str,
+        reason: str,
+        partial_outputs_inspected: bool,
+        ordered_handlers: Iterable[str],
+    ) -> list[str]:
+        """Explicitly reset a failed stage and downstream blocked tasks, preserving event history.
+
+        Upstream completed tasks are never reset. A named reviewer must confirm that
+        partial side effects/artifacts have been inspected before any retry.
+        """
+        if not reviewer.strip() or len(reason.strip()) < 5:
+            raise ValueError("A named reviewer and a meaningful retry reason are required.")
+        if not partial_outputs_inspected:
+            raise ValueError("Inspect partial outputs and explicitly confirm before retrying.")
+        order = list(ordered_handlers)
+        if start_handler not in order:
+            raise ValueError(f"Unknown pipeline handler: {start_handler}")
+        rows = self.list_workflow(workflow_id)
+        target = next((row for row in rows if row["handler"] == start_handler), None)
+        if target is None:
+            raise ValueError(f"No persisted task exists for handler: {start_handler}")
+        if target["status"] not in {"FAILED", "BLOCKED", "REVIEW_REQUIRED"}:
+            raise ValueError(
+                f"Task {start_handler} is {target['status']}; only failed or blocked stages can be retried."
+            )
+        handler_positions = {handler: index for index, handler in enumerate(order)}
+        reset: list[str] = []
+        now = _now()
+        for row in rows:
+            handler = row["handler"]
+            if handler not in handler_positions or handler_positions[handler] < handler_positions[start_handler]:
+                continue
+            status = row["status"]
+            if status == "RUNNING":
+                raise ValueError("A downstream task is still running; wait for it to finish before retrying.")
+            if status in {"FAILED", "BLOCKED", "REVIEW_REQUIRED", "SKIPPED"}:
+                self.conn.execute(
+                    """
+                    UPDATE agent_tasks
+                    SET status = 'PENDING', output_json = NULL, error = NULL,
+                        updated_at = ?, started_at = NULL, finished_at = NULL
+                    WHERE task_id = ?
+                    """,
+                    (now, row["task_id"]),
+                )
+                self._event(
+                    row["task_id"],
+                    workflow_id,
+                    "MANUAL_RETRY_REQUESTED",
+                    {
+                        "reviewer": reviewer.strip(),
+                        "reason": reason.strip(),
+                        "previous_status": status,
+                        "partial_outputs_inspected": True,
+                    },
+                )
+                reset.append(row["task_id"])
+        if not reset:
+            raise ValueError("No eligible failed/downstream tasks were found to reset.")
+        self.conn.commit()
+        return reset
+
     def checkpoint(self, workflow_id: str, key: str, value: Any) -> None:
         self.conn.execute(
             """INSERT INTO agent_checkpoints(workflow_id,checkpoint_key,value_json,updated_at)
