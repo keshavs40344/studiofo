@@ -61,14 +61,13 @@ def test_end_to_end_waiting_for_voice_then_full_mp4_render(tmp_path: Path) -> No
 
     pipeline = ChapterPipeline(conn, projects_root)
 
-    # Stage A: Run without voice -> must pause at WAITING_FOR_VOICE
+    # Stage A: Ingest notes, but block narration until each extracted claim is reviewed.
     res_no_voice = pipeline.run_pipeline(proj.id, notes_files=[sample_notes])
-    assert res_no_voice["status"] == "WAITING_FOR_VOICE"
-    assert Path(res_no_voice["recording_script"]).exists()
-    assert res_no_voice["scenes_count"] >= 5
-    assert res_no_voice["qa"]["rights"]["status"] == "PASSED"
+    assert res_no_voice["status"] == "WAITING_FOR_RESEARCH_REVIEW"
+    assert res_no_voice["claims_count"] >= 1
+    assert res_no_voice["pending_claims_count"] == res_no_voice["claims_count"]
 
-    # Stage B: Verify claims properly with official source, then supply own voice WAV
+    # Stage B: Reviewer inspects the original source and attests each claim excerpt.
     ev = EvidenceEngine(conn, proj_dir)
     src_id = ev.add_source(
         proj.id,
@@ -78,11 +77,17 @@ def test_end_to_end_waiting_for_voice_then_full_mp4_render(tmp_path: Path) -> No
         url="https://legislative.gov.in/",
         pub_date="1992-02-18",
     )
-    conn.execute(
-        "UPDATE claims SET status = ?, source_id = ?, verification_notes = ? WHERE project_id = ?",
-        (VerificationStatus.VERIFIED.value, src_id, "Verified against official Constitution text", proj.id),
-    )
-    conn.commit()
+    claim_rows = conn.execute(
+        "SELECT id, statement FROM claims WHERE project_id = ?", (proj.id,)
+    ).fetchall()
+    for claim in claim_rows:
+        ev.verify_claim_against_source(
+            claim_id=claim["id"],
+            source_id=src_id,
+            page_or_section="Official source excerpt reviewed in test fixture",
+            evidence_excerpt=claim["statement"] + " Supporting text inspected in the official source.",
+            reviewer_id="e2e-test-reviewer",
+        )
 
     wav_path = tmp_path / "my_narration.wav"
     _write_test_wav(wav_path, duration_sec=4.0)
@@ -134,4 +139,4 @@ def test_fastapi_dashboard_and_api(tmp_path: Path) -> None:
         data={"typed_notes": "RBI Monetary Policy Committee sets repo rate under RBI Act 1934."},
     )
     assert r_run.status_code == 200
-    assert r_run.json()["status"] == "WAITING_FOR_VOICE"
+    assert r_run.json()["status"] == "WAITING_FOR_RESEARCH_REVIEW"
