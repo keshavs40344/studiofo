@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import textwrap
 from pathlib import Path
 
 from upsc_studio.db.schemas import RightsStatus, SceneSpec
@@ -89,12 +88,16 @@ class StoryboardDirector:
                 transition_in=trans_in,
                 transition_out=trans_out,
                 audio_cue="narration_only" if idx > 1 else "intro_soft_ducked",
-                source_citations=[f"Claim {cid}" for cid in sec.get("claim_ids", [])] or ["Conceptual Framework"],
+                # Claim IDs are internal evidence references, not human-readable source citations.
+                # Actual source titles and pinpoint references are attached from the evidence ledger
+                # by the production stage after storyboard generation.
+                source_citations=[],
                 qc_status="PENDING",
                 metadata={
                     "visual_type": decision.visual_type.value,
                     "teaching_rationale": decision.rationale,
                     "recommended_animation": decision.recommended_animation,
+                    "citation_status": "PENDING_EVIDENCE_LEDGER_LINK",
                 },
             )
             scenes.append(scene)
@@ -162,5 +165,7 @@ class StoryboardDirector:
 
     @staticmethod
     def _extract_bullets(narration: str) -> list[str]:
+        # Preserve complete sentences. Layout/rendering code must wrap text to measured
+        # pixel bounds; character-count truncation silently changes the teaching content.
         parts = [p.strip() for p in narration.split(".") if len(p.strip()) >= 15]
-        return [textwrap.shorten(p, width=90, placeholder="...") for p in parts[:4]]
+        return parts[:4]
