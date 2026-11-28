@@ -486,7 +486,9 @@ class StagedChapterPipeline:
         visuals = ExtendedVisualSystems(project_dir, rights)
 
         from upsc_studio.graphics.documentary_animations import DocumentaryAnimationSuite
+        from upsc_studio.graphics.geojson_renderer import GeoJSONMapRenderer
         doc_anim = DocumentaryAnimationSuite(project_dir, rights)
+        geojson_maps = GeoJSONMapRenderer(project_dir, rights)
 
         specialised_visual_types = {
             "HISTORICAL_TIMELINE", "GEOGRAPHICAL_MAP", "SPLIT_COMPARISON",
@@ -579,27 +581,32 @@ class StagedChapterPipeline:
                     )
                 scene.primary_asset = str(asset)
             elif vtype == "GEOGRAPHICAL_MAP":
-                raw_regions = (scene.metadata or {}).get("map_regions")
-                regions = (
-                    [
-                        (str(item["name"]).strip(), str(item["detail"]).strip())
-                        for item in raw_regions
-                        if isinstance(item, dict)
-                        and str(item.get("name", "")).strip()
-                        and str(item.get("detail", "")).strip()
-                    ][:8]
-                    if isinstance(raw_regions, list) else []
-                )
-                if len(regions) >= 2 and scene.source_citations:
-                    asset = doc_anim.render_map_explanation(
-                        project_id, scene.scene_id, scene.section_title, regions, citation, duration_sec=clip_dur
+                raw_geojson = (scene.metadata or {}).get("map_geojson")
+                geojson_data: dict[str, Any] | None = None
+                if isinstance(raw_geojson, dict):
+                    geojson_data = raw_geojson
+                elif isinstance(raw_geojson, str) and raw_geojson.strip():
+                    supplied_path = Path(raw_geojson).expanduser().resolve()
+                    try:
+                        supplied_path.relative_to(project_dir.resolve())
+                    except ValueError as exc:
+                        raise ValueError("Map GeoJSON path must be inside the project workspace.") from exc
+                    if supplied_path.is_file():
+                        geojson_data = json.loads(supplied_path.read_text(encoding="utf-8"))
+
+                citation_record = citation_records[0] if citation_records else {}
+                source_url = str(citation_record.get("url") or "").strip()
+                if geojson_data and scene.source_citations and source_url:
+                    asset = geojson_maps.render(
+                        project_id=project_id,
+                        scene_id=scene.scene_id,
+                        title=scene.section_title,
+                        geojson=geojson_data,
+                        source_citation=citation,
+                        source_url=source_url,
+                        reference_date=str(scene.metadata.get("map_reference_date") or "") or None,
                     )
-                    # Current implementation is a region-card sequence, not a geographic map.
-                    scene.metadata["rendered_visual_kind"] = "REGION_CARDS_NOT_GEOGRAPHIC_MAP"
-                    scene.metadata["visual_data_warning"] = (
-                        "The current renderer produces labelled region cards, not a geographically accurate map. "
-                        "A sourced geometry/map renderer is required before publication."
-                    )
+                    scene.metadata["rendered_visual_kind"] = "GEOGRAPHIC_MAP"
                 else:
                     asset = doc_anim.render_process_demonstration(
                         project_id, scene.scene_id, scene.section_title, bullets[:4],
@@ -607,7 +614,8 @@ class StagedChapterPipeline:
                     )
                     scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_MAP"
                     scene.metadata["visual_data_warning"] = (
-                        "Geographical map requested but no sourced map geometry was supplied. "
+                        "Geographical map requested but a project-local GeoJSON FeatureCollection, "
+                        "named features, and a linked external source URL were not supplied. "
                         "This fallback is a draft only and blocks publication."
                     )
                 scene.primary_asset = str(asset)
