@@ -28,6 +28,7 @@ def _scene(asset: Path, **metadata) -> SceneSpec:
         metadata={
             "visual_type": "HISTORICAL_TIMELINE",
             "rendered_visual_kind": "TIMELINE",
+            "citation_status": "VERIFIED_EXTERNAL_SOURCE_LINKED",
             "citation_records": [
                 {
                     "claim_id": "claim-01",
