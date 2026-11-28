@@ -1,0 +1,163 @@
+{
+  "chapter_title": "Indus Valley Civilization",
+  "project_name": "Indus Valley Civilization — Complete UPSC Masterclass",
+  "content_category": "upsc",
+  "exam_cycle": "UPSC CSE 2026",
+  "target_duration_min": 15,
+  "sources": [
+    {
+      "key": "ncert_xii",
+      "title": "Themes in Indian History Part I — Theme 1: Bricks, Beads and Bones (The Harappan Civilisation)",
+      "publisher": "NCERT (National Council of Educational Research and Training)",
+      "source_tier": "PRIMARY_OFFICIAL",
+      "url": "https://ncert.nic.in/textbook.php?lehs1=1-4",
+      "pub_date": "2024-01-01"
+    },
+    {
+      "key": "asi_dholavira",
+      "title": "Dholavira: A Harappan City — UNESCO World Heritage Nomination & ASI Archaeological Dossier",
+      "publisher": "Archaeological Survey of India (ASI) / UNESCO",
+      "source_tier": "PRIMARY_OFFICIAL",
+      "url": "https://whc.unesco.org/en/list/1645/",
+      "pub_date": "2021-07-27"
+    },
+    {
+      "key": "rs_sharma",
+      "title": "India's Ancient Past — Chapter 7: Harappan Culture: Bronze Age Urbanization",
+      "publisher": "Oxford University Press (R.S. Sharma)",
+      "source_tier": "ACADEMIC_PEER_REVIEWED",
+      "url": "https://global.oup.com/academic/",
+      "pub_date": "2005-01-01"
+    },
+    {
+      "key": "upinder_singh",
+      "title": "A History of Ancient and Early Medieval India — Chapter 4: The Harappan Civilization",
+      "publisher": "Pearson Education (Upinder Singh)",
+      "source_tier": "ACADEMIC_PEER_REVIEWED",
+      "url": "https://www.pearson.com/",
+      "pub_date": "2008-01-01"
+    }
+  ],
+  "claims": [
+    {
+      "section": "Chronology & Discovery",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 1-4",
+      "statement": "Indus Valley Civilization, also called Harappan Civilization, is divided into Early Harappan (c. 3300-2600 BCE), Mature Harappan urban phase (c. 2600-1900 BCE), and Late Harappan (c. 1900-1300 BCE) based on radiocarbon dating."
+    },
+    {
+      "section": "Chronology & Discovery",
+      "source_key": "upinder_singh",
+      "page_or_section": "Chapter 4, pp. 132-136",
+      "statement": "Harappa was first excavated in 1921 by Daya Ram Sahni and Mohenjo-daro in 1922 by Rakhal Das Banerji, leading ASI Director-General John Marshall to announce the discovery of a Bronze Age civilization in 1924."
+    },
+    {
+      "section": "Geographical Extent",
+      "source_key": "rs_sharma",
+      "page_or_section": "Chapter 7, pp. 68-70",
+      "statement": "The Harappan geographical extent spanned roughly 1.3 million square kilometers from Manda (Jammu, Chenab river) in the north to Daimabad (Maharashtra, Pravara river) in the south, and from Sutkagendor (Balochistan, Dasht river) in the west to Alamgirpur (Uttar Pradesh, Hindon river) in the east."
+    },
+    {
+      "section": "Geographical Extent",
+      "source_key": "upinder_singh",
+      "page_or_section": "Chapter 4, pp. 137-140",
+      "statement": "Over 1,400 Harappan settlements have been identified, with the highest concentration along the dried Ghaggar-Hakra river basin, and Rakhigarhi in Haryana recognized as the largest Harappan site in India."
+    },
+    {
+      "section": "Town Planning & Architecture",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 5-8",
+      "statement": "Harappan cities followed a grid system with streets intersecting at right angles, divided into a raised fortified Citadel on the west and a larger Lower Town on the east, using standardized sun-dried and baked bricks in a 1:2:4 height-width-length ratio."
+    },
+    {
+      "section": "Town Planning & Architecture",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 6-7",
+      "statement": "Harappan urban sanitation featured covered street drains built with gypsum mortar and inspection manholes, while houses were courtyard-centered with private bathrooms, wells, and no ground-floor windows facing main streets to preserve privacy."
+    },
+    {
+      "section": "Major Sites — Mohenjo-daro & Harappa",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 8-9, 22",
+      "statement": "Mohenjo-daro on the Indus river yielded the Great Bath waterproofed with gypsum and natural bitumen, a massive granary, the bronze Dancing Girl cast using lost-wax (cire perdue) technique, the steatite Priest-King sculpture, and the Pashupati seal."
+    },
+    {
+      "section": "Major Sites — Mohenjo-daro & Harappa",
+      "source_key": "rs_sharma",
+      "page_or_section": "Chapter 7, pp. 71-73",
+      "statement": "Harappa on the Ravi river featured six granaries in two rows near working floors, stone symbols of lingam and yoni, and R-37 and H-cemeteries."
+    },
+    {
+      "section": "Major Sites — Dholavira & Lothal",
+      "source_key": "asi_dholavira",
+      "page_or_section": "UNESCO Dossier 1645, Section 2.a",
+      "statement": "Dholavira in Gujarat's Rann of Kutch (inscribed as UNESCO World Heritage Site in 2021) is unique for its three-part urban division into Citadel, Middle Town, and Lower Town, rock-cut water conservation reservoirs, and a ten-character Harappan signboard."
+    },
+    {
+      "section": "Major Sites — Dholavira & Lothal",
+      "source_key": "upinder_singh",
+      "page_or_section": "Chapter 4, pp. 150-154",
+      "statement": "Lothal on the Bhogava river in Gujarat served as a maritime port with an artificial brick-lined tidal dockyard, bead-making workshops, fire altars, double burials, and rice husk remains."
+    },
+    {
+      "section": "Major Sites — Kalibangan, Chanhudaro & Banawali",
+      "source_key": "upinder_singh",
+      "page_or_section": "Chapter 4, pp. 146-156",
+      "statement": "Kalibangan on the Ghaggar river in Rajasthan revealed the world's earliest ploughed agricultural field with perpendicular furrows, seven fire altars, and mud-brick houses without street drains, whereas Chanhudaro in Sindh was the only Harappan city without a citadel and specialized in bead making."
+    },
+    {
+      "section": "Major Sites — Kalibangan, Chanhudaro & Banawali",
+      "source_key": "rs_sharma",
+      "page_or_section": "Chapter 7, pp. 74-75",
+      "statement": "Banawali in Haryana featured radial streets and terracotta plough models, while Surkotada in Gujarat yielded disputed horse bone remains from a late phase."
+    },
+    {
+      "section": "Agriculture & Subsistence",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 3-4",
+      "statement": "Harappans cultivated wheat, barley, lentils, chickpeas, sesame, mustard, and millets, and were the earliest people in the world to produce cotton, which the Greeks later called Sindon."
+    },
+    {
+      "section": "Agriculture & Subsistence",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, p. 4",
+      "statement": "Irrigation methods included canal traces at Shortughai in Afghanistan and stone-lined water reservoirs at Dholavira, alongside domesticated zebu humped cattle, buffalo, sheep, goat, and pig, while horses were not central to Mature Harappan culture and never appear on Harappan seals."
+    },
+    {
+      "section": "Craft, Metallurgy & Standardization",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 10-14",
+      "statement": "Harappan craftspeople alloyed copper from Khetri (Rajasthan) and Oman with tin from Afghanistan to make bronze, crafted carnelian beads at Lothal and Chanhudaro, shell objects at Nageshwar and Balakot, and imported lapis lazuli from Shortughai."
+    },
+    {
+      "section": "Craft, Metallurgy & Standardization",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, p. 15",
+      "statement": "Exchanges were regulated by standardized cubical chert weights following a binary progression (1, 2, 4, 8, 16, 32 up to 12,800) in lower denominations and a decimal system in higher denominations."
+    },
+    {
+      "section": "Trade & External Contacts",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 13-14",
+      "statement": "Harappan trade operated via barter without metallic coinage, maintaining maritime links with Mesopotamia whose cuneiform texts refer to Meluhha (Indus region), Dilmun (Bahrain), and Magan (Oman)."
+    },
+    {
+      "section": "Script & Seals",
+      "source_key": "ncert_xii",
+      "page_or_section": "Theme 1, pp. 15-16",
+      "statement": "The Harappan script remains undeciphered, comprising around 375 to 400 pictographic signs typically written right-to-left or in boustrophedon style on square steatite seals bearing unicorn or bull motifs."
+    },
+    {
+      "section": "Religion & Society",
+      "source_key": "rs_sharma",
+      "page_or_section": "Chapter 7, pp. 81-84",
+      "statement": "No monumental temples or royal palaces have been found in the Indus Valley; religious practices are inferred from Mother Goddess terracotta figurines, the horned Pashupati seal surrounded by elephant, tiger, rhino, buffalo and deer, pipal tree worship, and fire altars."
+    },
+    {
+      "section": "Decline & Continuity",
+      "source_key": "upinder_singh",
+      "page_or_section": "Chapter 4, pp. 176-181",
+      "statement": "The Mature Harappan urban phase declined around 1900 BCE due to multi-causal factors including climate aridity, monsoon weakening, Ghaggar-Hakra river drying, floods, and Mesopotamian trade collapse, rather than Mortimer Wheeler's discredited single-event Aryan invasion hypothesis."
+    }
+  ]
+}

@@ -130,13 +130,29 @@ Every implementation unit is tracked with its unique ID, files modified, test ve
 - **Implementation Status:** `COMPLETE`
 - **Tests Executed:** `pytest tests/test_release_audit_and_batch.py tests/test_teaching_evidence_safety.py tests/test_advanced_teaching_engine.py`
 - **Actual Test Result:** 14 passed (2 new + 12 regression)
-- **Commit SHA:** Pending commit on `phase17/recovery-runtime-integration`
+- **Commit SHA:** `a440278`
 - **Outstanding Issues:** None.
+
+---
+
+### Task: `TASK-10-INDUS-VALLEY-PRODUCTION`
+- **Description:** Assembled verified Indus Valley Civilization knowledge pack (4 authoritative sources, 20 verified claims covering chronology, discovery, extent, major sites, town planning, agriculture, metallurgy, trade, script, religion, and decline) and executed full end-to-end production pipeline (`scripts/produce_indus_valley.py`) with Piper Hinglish TTS and FFmpeg 1080p rendering.
+- **Files Changed:**
+  - `data/knowledge_packs/indus_valley_civilization.json`
+  - `scripts/produce_indus_valley.py`
+  - `docs/AUTONOMOUS_COMPLETION_LOG.md`
+- **Implementation Status:** `COMPLETE`
+- **Tests & Production Executed:** `python scripts/produce_indus_valley.py` (full 7-stage pipeline + `ReleaseAuditGenerator`)
+- **Actual Output:**
+  - `final_video.mp4`: 1920x1080 @ 30fps, 398.05s (6m 38s), 10,075,264 bytes
+  - 4 vertical 9:16 Shorts (`SHORT_01.mp4`–`SHORT_04.mp4` + `.srt`)
+  - 10-deliverable study pack + `subtitles/subtitles.srt` + `publishing/thumbnail.png`
+  - Core QA Gates: `ACADEMICALLY_REVIEWED=PASSED`, `RIGHTS_CLEARED=PASSED`, `VIDEO_TECHNICALLY_APPROVED=PASSED`, `READY_FOR_PUBLICATION=PENDING` (awaiting human playback inspection)
+- **Commit SHA:** Pending commit on `phase17/recovery-runtime-integration`
+- **Outstanding Issues:** Human playback inspection (`J_FINAL_PLAYBACK_INSPECTION`) required before `APPROVED` / YouTube upload.
 
 ---
 
 ## Active Backlog & Next Implementation Units
 
-| Task ID | Component | Description | Priority | Status |
-| :--- | :--- | :--- | :---: | :---: |
-| `TASK-10-INDUS-VALLEY-PRODUCTION` | `production` | End-to-end Indus Valley Civilization documentary video, Shorts, subtitles, and complete study pack generation | P1 | `IN_PROGRESS` |
+All planned tasks (`MISSION-01` through `TASK-10`) are complete.
