@@ -494,6 +494,7 @@ class StagedChapterPipeline:
             # Resolve scene citations to actual external source titles and pinpoint references.
             # Internal claim IDs are never rendered as if they were source citations.
             citations: list[str] = []
+            citation_records: list[dict[str, str | None]] = []
             for claim_id in scene.claim_ids:
                 source_row = self.conn.execute(
                     """
@@ -518,6 +519,20 @@ class StagedChapterPipeline:
                         citation_text += f" — {str(source_row['page_or_section']).strip()}"
                     if citation_text not in citations:
                         citations.append(citation_text)
+                    citation_records.append(
+                        {
+                            "claim_id": claim_id,
+                            "title": str(source_row["title"] or "").strip(),
+                            "publisher": str(source_row["publisher"] or "").strip(),
+                            "url": str(source_row["url"] or "").strip(),
+                            "page_or_section": (
+                                str(source_row["page_or_section"]).strip()
+                                if source_row["page_or_section"] else None
+                            ),
+                            "source_tier": str(source_row["source_tier"] or "").strip(),
+                        }
+                    )
+            scene.metadata["citation_records"] = citation_records
             scene.source_citations = citations
             scene.metadata["citation_status"] = (
                 "VERIFIED_EXTERNAL_SOURCE_LINKED" if citations else "SOURCE_REVIEW_REQUIRED"
