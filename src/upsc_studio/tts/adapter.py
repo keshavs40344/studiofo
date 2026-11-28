@@ -31,6 +31,7 @@ class PiperTTSEngine:
         self.project_dir = project_dir
         self.tts_python = PROJECT_ROOT / ".venv_tts" / "Scripts" / "python.exe"
         self.model_path = PROJECT_ROOT / "data" / "tts_models" / "piper" / "hi_IN-pratham-medium.onnx"
+        self.english_model_path = PROJECT_ROOT / "data" / "tts_models" / "piper" / "en_US-ryan-medium.onnx"
         self.seg_dir = project_dir / "audio" / "narration_segments"
         self.proc_dir = project_dir / "audio" / "processed"
         self.sub_dir = project_dir / "subtitles"
@@ -94,8 +95,9 @@ class PiperTTSEngine:
             )
 
         if use_piper:
-            engine_name = "piper_hi_IN-pratham-medium"
-            model_license = "MIT (rhasspy/piper-voices hi_IN-pratham-medium)"
+            has_en = self.english_model_path.is_file()
+            engine_name = "piper_en_US-ryan-medium + hi_IN-pratham-medium" if has_en else "piper_hi_IN-pratham-medium"
+            model_license = "MIT (rhasspy/piper-voices)"
         else:
             engine_name = f"windows_sapi_hindi_{sapi_hindi}"
             model_license = "Windows SAPI Hindi Voice"
@@ -104,14 +106,22 @@ class PiperTTSEngine:
         raw_seg_wavs: list[Path] = []
         seg_durations: list[float] = []
 
+        import re
         for scene in scenes:
             spoken_text, applied_terms = self.normalizer.normalize(scene.narration_text)
+            # Clean up common scholarly/chronological notation for natural TTS reading
+            spoken_text = re.sub(r"\bc\.\s*(\d+)", r"circa \1", spoken_text)
+            spoken_text = re.sub(r"(\d+):(\d+):(\d+)", r"\1 to \2 to \3", spoken_text)
+            spoken_text = spoken_text.replace("cire perdue", "seer perdoo").replace("boustrophedon", "boo-stro-fee-don")
             pron_reports.append({"scene_id": scene.scene_id, "applied_terms": applied_terms})
+
+            has_devanagari = bool(re.search(r"[\u0900-\u097F]", spoken_text))
+            chosen_model = self.model_path if (has_devanagari or not self.english_model_path.is_file()) else self.english_model_path
 
             seg_wav = self.seg_dir / f"{scene.scene_id}.wav"
             if use_piper:
                 try:
-                    self._run_piper(spoken_text, seg_wav)
+                    self._run_piper(spoken_text, seg_wav, model_path=chosen_model)
                 except Exception:
                     if sapi_hindi:
                         self._run_sapi(scene.narration_text, seg_wav, voice_name=sapi_hindi)

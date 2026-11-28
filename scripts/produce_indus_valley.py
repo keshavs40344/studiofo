@@ -50,9 +50,12 @@ def main() -> None:
     project_dir = Path(project.root_dir)
     evidence = EvidenceEngine(conn, project_dir)
 
-    # Clear previous claims/sources if re-running cleanly
+    # Clear previous claims/sources/tasks if re-running cleanly
     conn.execute("DELETE FROM claims WHERE project_id = ?", (project.id,))
     conn.execute("DELETE FROM sources WHERE project_id = ?", (project.id,))
+    conn.execute("DELETE FROM agent_task_events WHERE workflow_id = ?", (f"chapter-pipeline:{project.id}",))
+    conn.execute("DELETE FROM agent_tasks WHERE workflow_id = ?", (f"chapter-pipeline:{project.id}",))
+    conn.execute("DELETE FROM render_jobs WHERE project_id = ?", (project.id,))
     conn.commit()
 
     source_map: dict[str, str] = {}

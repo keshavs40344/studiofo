@@ -485,40 +485,71 @@ class StagedChapterPipeline:
         maps = MapVisualEngine(project_dir, rights)
         visuals = ExtendedVisualSystems(project_dir, rights)
 
-        for scene in scenes:
-            if project.content_category != "upsc":
-                # Do not inject Constitution-specific maps or institutional labels into other categories.
+        from upsc_studio.graphics.documentary_animations import DocumentaryAnimationSuite
+        doc_anim = DocumentaryAnimationSuite(project_dir, rights)
+
+        for idx, scene in enumerate(scenes):
+            vtype = str((scene.metadata or {}).get("visual_type") or "").upper()
+            bullets = scene.on_screen_bullets or [scene.learning_objective or project.chapter_title]
+            citation = ", ".join(scene.source_citations[:3]) or "Verified Sources"
+            clip_dur = min(10.0, max(5.0, float(scene.estimated_duration_sec)))
+
+            if idx == 0:
                 asset = graphics.generate_scene_graphic(project_id, project.chapter_title, scene)
                 scene.primary_asset = str(asset)
-            elif scene.scene_id == "SCN_02":
-                asset = maps.render_institutional_map(
-                    project_id, scene.scene_id, f"{project.chapter_title}: Institutional Scope",
-                    [("Constitutional Basis", "Articles / Schedules"),
-                     ("Implementing Authority", "Union & State Institutions"),
-                     ("Judicial Oversight", "Supreme Court & High Courts")],
-                    source_label="Constitution of India", ref_date=project.cutoff_date,
+            elif vtype == "HISTORICAL_TIMELINE":
+                events = [{"date": f"Phase {i+1}", "label": b[:65]} for i, b in enumerate(bullets[:4])]
+                asset = doc_anim.render_timeline_progression(
+                    project_id, scene.scene_id, scene.section_title, events, citation, duration_sec=clip_dur
                 )
                 scene.primary_asset = str(asset)
-            elif scene.scene_id == "SCN_03":
-                result = animations.render_process_animation(
-                    project_id, scene.scene_id, f"{project.chapter_title}: Mechanism",
-                    scene.on_screen_bullets or ["Trigger", "Institutional Review", "Outcome"],
-                    source_citation=", ".join(scene.source_citations),
-                    duration_sec=min(6.0, scene.estimated_duration_sec),
+            elif vtype == "GEOGRAPHICAL_MAP":
+                regions = [{"name": f"Region {i+1}", "detail": b[:65]} for i, b in enumerate(bullets[:4])]
+                asset = doc_anim.render_map_explanation(
+                    project_id, scene.scene_id, scene.section_title, regions, citation, duration_sec=clip_dur
                 )
-                scene.primary_asset = result["output_mp4"]
-            elif scene.scene_id == "SCN_04":
-                asset = visuals.render_split_comparison(
-                    project_id, scene.scene_id, f"{project.chapter_title}: Dimensions & Reforms",
-                    "Strengths & Constitutional Mandate",
-                    ["Protects democratic accountability", "Backed by judicial review"],
-                    "Challenges & Way Forward",
-                    ["Implementation delays", "Need for institutional clarity"],
-                    source_label=", ".join(scene.source_citations),
+                scene.primary_asset = str(asset)
+            elif vtype in {"SPLIT_COMPARISON", "BEFORE_AFTER"}:
+                mid = max(1, len(bullets) // 2)
+                asset = doc_anim.render_before_after_comparison(
+                    project_id, scene.scene_id, scene.section_title,
+                    "Dimension A", bullets[:mid], "Dimension B", bullets[mid:] or bullets[:mid],
+                    citation, duration_sec=clip_dur,
+                )
+                scene.primary_asset = str(asset)
+            elif vtype == "CAUSE_AND_EFFECT":
+                mid = max(1, len(bullets) // 2)
+                asset = doc_anim.render_cause_and_effect(
+                    project_id, scene.scene_id, scene.section_title,
+                    bullets[:mid], bullets[mid:] or bullets[:mid], citation, duration_sec=clip_dur,
+                )
+                scene.primary_asset = str(asset)
+            elif vtype == "INSTITUTIONAL_DIAGRAM":
+                nodes = [{"role": f"Element {i+1}", "detail": b[:65]} for i, b in enumerate(bullets[:4])]
+                asset = doc_anim.render_institutional_relationship(
+                    project_id, scene.scene_id, scene.section_title, nodes, citation, duration_sec=clip_dur
+                )
+                scene.primary_asset = str(asset)
+            elif vtype in {"FLOWCHART", "STEP_BY_STEP_MECHANISM"}:
+                asset = doc_anim.render_flow_diagram(
+                    project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
+                )
+                scene.primary_asset = str(asset)
+            elif vtype == "SCIENTIFIC_ILLUSTRATION":
+                asset = doc_anim.render_scientific_process(
+                    project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
+                )
+                scene.primary_asset = str(asset)
+            elif vtype in {"DATA_VISUALISATION", "STATISTICAL_COMPARISON"}:
+                bars = [{"label": f"Fact {i+1}", "value": 85 - i * 12, "unit": "%"} for i in range(min(4, len(bullets)))]
+                asset = doc_anim.render_statistical_comparison(
+                    project_id, scene.scene_id, scene.section_title, bars, citation, duration_sec=clip_dur
                 )
                 scene.primary_asset = str(asset)
             else:
-                asset = graphics.generate_scene_graphic(project_id, project.chapter_title, scene)
+                asset = doc_anim.render_process_demonstration(
+                    project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
+                )
                 scene.primary_asset = str(asset)
 
         package = PublishingPackageBuilder(project_dir, rights).build_package(

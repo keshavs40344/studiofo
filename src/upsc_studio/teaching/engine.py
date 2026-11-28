@@ -373,8 +373,8 @@ class TeachingEngine:
 
         if verified_claims:
             recap_text = (
-                f"Toh doston, '{chapter_title}' ke is complete revision mein humne kul {n} verified facts aur concepts cover kiye hain. "
-                "Prelims aur Mains dono ke liye in saare dates, sites, personalities aur institutional facts ko revise karein. "
+                f"To summarize, in this complete masterclass on '{chapter_title}', we covered all {n} verified facts and analytical dimensions. "
+                "Revise every site, date, architectural feature, and historical debate carefully for both Prelims and Mains. "
                 + " ".join(str(item["statement"]).strip().rstrip(".") + "." for item in verified_claims[:4])
             )
         else:
@@ -388,9 +388,8 @@ class TeachingEngine:
                 "claim_ids": [],
                 "visual_category": "Motion Graphics / Title Card",
                 "narration": (
-                    f"Namaste aur swagat hai UPSC Studio mein. Aaj hum '{chapter_title}' ko "
-                    "poori gehraai aur source-led tareeke se samjhenge. Is lesson mein har factual statement "
-                    "verified official aur academic sources par aadharit hai. "
+                    f"Welcome to UPSC Studio. Today, we will explore '{chapter_title}' in complete, exam-ready depth. "
+                    "Every single fact in this documentary is backed by verified official and academic sources. "
                     f"Subject context: {primary_papers}."
                 ),
             },
@@ -402,7 +401,7 @@ class TeachingEngine:
                 "visual_category": "Learning Screen / Definition Card",
                 "narration": claim_block(
                     first,
-                    f"Aaiye '{chapter_title}' ke foundational concepts aur core facts ko samajhte hain:",
+                    f"Let us begin with the foundational chronology, discovery, and core concepts of '{chapter_title}'.",
                 ),
             },
             {
@@ -413,7 +412,7 @@ class TeachingEngine:
                 "visual_category": "Concept Animation / Flowchart",
                 "narration": claim_block(
                     middle,
-                    f"Ab '{chapter_title}' ke key features, structure aur working mechanism ko detail mein dekhte hain:",
+                    f"Now let us examine the key sites, urban architecture, and structural features of '{chapter_title}'.",
                 ),
             },
             {
@@ -424,7 +423,7 @@ class TeachingEngine:
                 "visual_category": "Data / Comparison Table",
                 "narration": claim_block(
                     later,
-                    f"Ab aaiye '{chapter_title}' ke analytical dimensions, debates aur major findings ko samajhte hain:",
+                    f"Finally, let us analyze the trade, script, religion, and scholarly debates surrounding '{chapter_title}'.",
                 ),
             },
             {

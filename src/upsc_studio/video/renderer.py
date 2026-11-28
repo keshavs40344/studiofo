@@ -73,6 +73,8 @@ class VideoRenderer:
                 cmd = [ffmpeg_exe, "-y"]
                 if not is_video_asset:
                     cmd.extend(["-loop", "1"])
+                else:
+                    cmd.extend(["-stream_loop", "-1"])
                 cmd.extend(
                     [
                         "-i",
