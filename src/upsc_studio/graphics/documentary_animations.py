@@ -703,7 +703,7 @@ class DocumentaryAnimationSuite:
                 b_x = margins.margin_x + idx * gap
                 lbl, desc, col = stages[idx]
                 draw.rounded_rectangle([b_x, y_b, b_x + box_w, y_b + 220], radius=16, fill=ColorPalette.SURFACE_CARD, outline=col, width=3)
-                draw.text((b_x + 20, y_b + 24), lbl[:22], fill=col, font=f_hdr)
+                self._draw_wrapped_text(draw, lbl, (b_x + 20, y_b + 24), f_hdr, col, max_width=box_w - 40, max_lines=2)
                 self._draw_wrapped_text(draw, desc, (b_x + 20, y_b + 84), f_body, ColorPalette.TEXT_PRIMARY, max_width=box_w - 40, max_lines=2)
 
             self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
