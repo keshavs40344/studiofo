@@ -11,6 +11,7 @@ from typing import Any
 from upsc_studio.db.schemas import SceneSpec
 from upsc_studio.qa.auditor import QAAuditor
 from upsc_studio.qa.completeness_audit import CompletenessAuditor
+from upsc_studio.qa.visual_audit import audit_documentary_scenes
 
 
 class TenGateAuditor:
@@ -194,6 +195,7 @@ class TenGateAuditor:
             scene.primary_asset and Path(scene.primary_asset).is_file()
             for scene in scenes
         )
+        visual_audit = audit_documentary_scenes(scenes)
 
         gates: dict[str, str] = {
             "A_SYLLABUS_COMPLETENESS": (
@@ -218,7 +220,7 @@ class TenGateAuditor:
                 else ("PASSED" if reviewed("teaching_clarity") else "PENDING")
             ),
             "F_VISUAL_RELEVANCE": (
-                "FAILED" if not visual_assets_present
+                "FAILED" if not visual_assets_present or visual_audit["status"] == "FAILED"
                 else ("PASSED" if reviewed("visual_relevance") else "PENDING")
             ),
             "G_VOICE_SUBTITLE_ALIGNMENT": (
@@ -260,6 +262,7 @@ class TenGateAuditor:
                     "source_rows": source_count,
                     "external_sources_with_url": external_sources,
                 },
+                "VISUAL_AUDIT": visual_audit,
                 "CONTENT_SCOPE": {
                     "category": content_category,
                     "upsc_coverage_rows": cov_count,
