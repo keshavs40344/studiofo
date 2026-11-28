@@ -81,17 +81,20 @@ def test_teaching_engine_syllabus_preserving_expansion(tmp_path: Path) -> None:
     proj_dir = Path(proj.root_dir)
     engine = TeachingEngine(conn, proj_dir)
 
-    # When target duration >= 7 min, engine expands with Constituent Assembly debates and Judicial doctrines
+    # The lesson structure stays evidence-led; target duration never injects unsourced history.
     pkg = engine.generate_teaching_package(
         project_id=proj.id,
         chapter_title=proj.chapter_title,
         chapter_map={"primary_papers": ["GS-II"]},
         target_duration_min=8,
     )
-    assert pkg["sections_count"] == 7
+    assert pkg["sections_count"] == 5
+    assert pkg["content_readiness"] == "INSUFFICIENT_EVIDENCE"
     section_ids = [s["section_id"] for s in pkg["sections"]]
-    assert "SEC_03B" in section_ids
-    assert "SEC_04B" in section_ids
+    assert section_ids == ["SEC_01", "SEC_02", "SEC_03", "SEC_04", "SEC_05"]
+    script = (proj_dir / "teaching" / "script_hinglish.md").read_text(encoding="utf-8")
+    assert "Constituent Assembly" not in script
+    assert "Insufficient information" in script
 
 
 def test_fact_verification_rejects_missing_page_or_source(tmp_path: Path) -> None:

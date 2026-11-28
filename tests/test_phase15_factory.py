@@ -29,7 +29,7 @@ def test_agent_registry_and_retry_recovery(tmp_path: Path) -> None:
     def flaky() -> dict:
         attempts["count"] += 1
         if attempts["count"] == 1:
-            raise RuntimeError("Transient network timeout")
+            raise TimeoutError("Transient network timeout")
         return {"output": "ok"}
 
     res, out = sup.run_with_retry("AGENT_03", flaky, input_refs=["doc_1"], max_retries=2)
@@ -95,14 +95,45 @@ def test_autonomous_factory_no_user_voice_with_piper_tts(tmp_path: Path) -> None
     )
 
     sup = ExecutiveProducer(conn, tmp_path / "projects")
-    out = sup.run_autonomous_factory(proj.id, ai_narration=True, youtube_token_path=tmp_path / "no_oauth.json")
+    out = sup.run_autonomous_factory(
+        proj.id,
+        ai_narration=True,
+        youtube_token_path=tmp_path / "no_oauth.json",
+    )
 
     assert out["agents_registered"] == 24
-    assert out["supervisor_task"]["status"] == "COMPLETED"
-    assert Path(out["audio_report"]["narration_full_wav"]).exists()
-    assert Path(out["audio_report"]["narration_transcript_srt"]).exists()
-    assert Path(out["audio_report"]["pronunciation_report"]).exists()
-    assert Path(out["render_manifest"]["final_video"]).exists()
-    assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
-    assert len(out["editorial_and_shorts"]["shorts_candidates"]) >= 1
-    assert out["youtube_publish"]["status"] == "PENDING_OAUTH_CONNECTION"
+    assert out["supervisor_task"]["status"] == "BLOCKED"
+    assert out["workflow"]["status"] == "COMPLETED"
+    assert out["workflow"]["task_count"] == 4
+    if out["status"] in {"WAITING_FOR_VOICE", "NEEDS_REVIEW"}:
+        assert out["agent_states"]["AGENT_01"]["status"] == "BLOCKED"
+    else:
+        assert out["status"] == "APPROVED"
+        assert out["agent_states"]["AGENT_01"]["status"] == "COMPLETED"
+    assert out["agent_states"]["AGENT_20"]["status"] == "COMPLETED"
+    assert out["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
+    assert out["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
+    assert all(candidate["claim_ids"] for candidate in out["editorial_and_shorts"]["shorts_candidates"])
+    # Scenes without explicit claim links do not produce factual Shorts candidates.
+
+    if out["status"] == "WAITING_FOR_VOICE":
+        capabilities = out["voice_capabilities"]
+        assert capabilities["can_synthesize_hindi"] is False
+        assert "No Hindi Piper model" in out["voice_wait_reason"]
+        assert not out.get("audio_report")
+        assert not out.get("render_manifest")
+        assert out["youtube_publish"]["status"] in {
+            "PENDING_VIDEO_RENDER",
+            "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+        }
+    else:
+        assert out["status"] in {"APPROVED", "NEEDS_REVIEW"}
+        assert Path(out["audio_report"]["narration_full_wav"]).exists()
+        assert Path(out["audio_report"]["narration_transcript_srt"]).exists()
+        assert Path(out["audio_report"]["pronunciation_report"]).exists()
+        assert Path(out["render_manifest"]["final_video"]).exists()
+        assert Path(out["render_manifest"]["final_video"]).stat().st_size > 20000
+        assert out["youtube_publish"]["status"] in {
+            "PENDING_VIDEO_RENDER",
+            "BLOCKED_AWAITING_EXPLICIT_PUBLISH_APPROVAL",
+        }

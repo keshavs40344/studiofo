@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 import json
-import textwrap
 from pathlib import Path
 
 from upsc_studio.db.schemas import RightsStatus, SceneSpec
+from upsc_studio.storyboard.visual_director import VisualDirectionEngine
 
 
 class StoryboardDirector:
@@ -17,18 +17,59 @@ class StoryboardDirector:
         self.storyboard_dir = project_dir / "storyboard"
         self.storyboard_dir.mkdir(parents=True, exist_ok=True)
 
+    def _expand_sections_to_beats(self, sections: list[dict]) -> list[dict]:
+        """Split long narrative sections into crisp 15-25s documentary beats."""
+        import re
+        beats: list[dict] = []
+        for sec in sections:
+            narration = str(sec.get("narration", "")).strip()
+            words = narration.split()
+            sentences = [s.strip() for s in re.split(r"(?<=[.!?।])\s+|\n+", narration) if len(s.strip()) >= 12]
+            if len(words) <= 55 or len(sentences) < 3:
+                beats.append(sec)
+                continue
+            # Group into 2-sentence beats so each scene stays dynamic (12-25s)
+            chunk_size = 2
+            chunks = [sentences[i : i + chunk_size] for i in range(0, len(sentences), chunk_size)]
+            total_dur = float(sec.get("duration_sec", 20.0))
+            total_len = max(1, sum(len(" ".join(c).split()) for c in chunks))
+            for b_idx, chunk in enumerate(chunks, start=1):
+                beat_text = " ".join(chunk)
+                beat_words = len(beat_text.split())
+                beat_dur = max(6.0, round(total_dur * (beat_words / total_len), 1))
+                beats.append({
+                    **sec,
+                    "title": f"{sec['title']} (Part {b_idx})" if len(chunks) > 1 else sec["title"],
+                    "narration": beat_text,
+                    "duration_sec": beat_dur,
+                })
+        return beats
+
     def build_storyboard(self, chapter_title: str, sections: list[dict]) -> list[SceneSpec]:
         """Generate scene specs, graphics specs, and transition plan from script sections."""
         scenes: list[SceneSpec] = []
         graphics_specs: list[dict] = []
         transitions: list[dict] = []
+        visual_plan: list[dict] = []
+        director_engine = VisualDirectionEngine()
+        beats = self._expand_sections_to_beats(sections)
 
-        for idx, sec in enumerate(sections, start=1):
+        for idx, sec in enumerate(beats, start=1):
             scene_id = f"SCN_{idx:02d}"
             bullets = self._extract_bullets(sec["narration"])
             trans_in = "fade_in" if idx == 1 else "cross_dissolve"
-            trans_out = "dip_to_black" if idx == len(sections) else "hard_cut"
+            trans_out = "dip_to_black" if idx == len(beats) else "hard_cut"
             anim = "zoom_in" if idx == 1 else ("step_reveal" if "Flowchart" in sec["visual_category"] else "fade_in")
+
+            decision = director_engine.determine_visual(
+                scene_id=scene_id,
+                section_id=sec["section_id"],
+                title=sec["title"],
+                objective=sec.get("objective", ""),
+                narration=sec.get("narration", ""),
+                visual_category=sec.get("visual_category", ""),
+            )
+            visual_plan.append(decision.to_dict())
 
             scene = SceneSpec(
                 scene_id=scene_id,
@@ -47,14 +88,24 @@ class StoryboardDirector:
                 transition_in=trans_in,
                 transition_out=trans_out,
                 audio_cue="narration_only" if idx > 1 else "intro_soft_ducked",
-                source_citations=[f"Claim {cid}" for cid in sec.get("claim_ids", [])] or ["Conceptual Framework"],
+                # Claim IDs are internal evidence references, not human-readable source citations.
+                # Actual source titles and pinpoint references are attached from the evidence ledger
+                # by the production stage after storyboard generation.
+                source_citations=[],
                 qc_status="PENDING",
+                metadata={
+                    "visual_type": decision.visual_type.value,
+                    "teaching_rationale": decision.rationale,
+                    "recommended_animation": decision.recommended_animation,
+                    "citation_status": "PENDING_EVIDENCE_LEDGER_LINK",
+                },
             )
             scenes.append(scene)
             graphics_specs.append(
                 {
                     "scene_id": scene_id,
                     "visual_category": sec["visual_category"],
+                    "visual_type": decision.visual_type.value,
                     "title": sec["title"],
                     "subtitle": chapter_title,
                     "bullets": bullets,
@@ -73,6 +124,10 @@ class StoryboardDirector:
 
         (self.storyboard_dir / "storyboard.json").write_text(
             json.dumps([s.model_dump() for s in scenes], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        (self.storyboard_dir / "visual_direction_plan.json").write_text(
+            json.dumps(visual_plan, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
         (self.storyboard_dir / "graphics_spec.json").write_text(
@@ -110,5 +165,7 @@ class StoryboardDirector:
 
     @staticmethod
     def _extract_bullets(narration: str) -> list[str]:
+        # Preserve complete sentences. Layout/rendering code must wrap text to measured
+        # pixel bounds; character-count truncation silently changes the teaching content.
         parts = [p.strip() for p in narration.split(".") if len(p.strip()) >= 15]
-        return [textwrap.shorten(p, width=90, placeholder="...") for p in parts[:4]]
+        return parts[:4]

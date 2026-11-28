@@ -31,6 +31,20 @@ dev = [
     "pytest>=8.0.0",
     "httpx>=0.27.0",
 ]
+charts = [
+    "altair>=5.0.0",
+    "pandas>=2.0.0",
+    "vl-convert-python>=1.6.0",
+]
+
+i18n = [
+    "argostranslate>=1.9.6",
+]
+
+youtube = [
+    "google-api-python-client>=2.120.0",
+    "google-auth-oauthlib>=1.2.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["src"]

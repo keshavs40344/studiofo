@@ -6,6 +6,7 @@ import json
 import sqlite3
 import subprocess
 import uuid
+from datetime import date
 from pathlib import Path
 
 from upsc_studio.core.hardware import find_ffmpeg
@@ -82,21 +83,112 @@ class QAAuditor:
 
     def _check_academic(self, project_id: str) -> dict:
         blockers: list[str] = []
+        project_row = self.conn.execute(
+            "SELECT content_category FROM projects WHERE id = ?", (project_id,)
+        ).fetchone()
+        content_category = project_row["content_category"] if project_row else "upsc"
         cov_rows = self.conn.execute(
             "SELECT status FROM coverage_ledger WHERE project_id = ?", (project_id,)
         ).fetchall()
-        if not cov_rows:
-            blockers.append("No syllabus coverage mapping recorded.")
+        if content_category == "upsc" and not cov_rows:
+            blockers.append("No UPSC syllabus coverage mapping recorded.")
+        elif content_category != "upsc":
+            topic_map_path = self.project_dir / "research" / "topic_map.json"
+            if not topic_map_path.is_file():
+                blockers.append("Category topic map is missing.")
 
         claims = self.conn.execute(
-            "SELECT id, status FROM claims WHERE project_id = ?", (project_id,)
+            """
+            SELECT c.id, c.status, c.source_id, s.source_tier, s.url
+            FROM claims AS c
+            LEFT JOIN sources AS s ON s.id = c.source_id
+            WHERE c.project_id = ?
+            ORDER BY c.id
+            """,
+            (project_id,),
         ).fetchall()
+        if not claims:
+            blockers.append("No factual claims have been entered for academic review.")
         bad_claims = [c["id"] for c in claims if c["status"] != VerificationStatus.VERIFIED.value]
         if bad_claims:
             blockers.append(f"{len(bad_claims)} claim(s) are not VERIFIED: {', '.join(bad_claims[:5])}")
 
-        for req_file in ("teaching/script_hinglish.md", "teaching/study_notes.md", "teaching/question_bank.json"):
-            if not (self.project_dir / req_file).exists():
+        claims_without_external_source = [
+            c["id"] for c in claims
+            if c["status"] == VerificationStatus.VERIFIED.value
+            and (
+                not c["source_id"]
+                or not c["source_tier"]
+                or c["source_tier"] == "USER_NOTES"
+                or not c["url"]
+                or not str(c["url"]).strip()
+            )
+        ]
+        if claims_without_external_source:
+            blockers.append(
+                "Verified claims without an external source URL: "
+                + ", ".join(claims_without_external_source[:5])
+            )
+
+        external_source_count = self.conn.execute(
+            """
+            SELECT COUNT(*) AS c FROM sources
+            WHERE project_id = ?
+              AND source_tier <> 'USER_NOTES'
+              AND url IS NOT NULL
+              AND TRIM(url) <> ''
+            """,
+            (project_id,),
+        ).fetchone()["c"]
+        if external_source_count == 0:
+            blockers.append("No non-user research source with a URL is recorded.")
+
+        if content_category == "current_affairs":
+            project_cutoff = self.conn.execute(
+                "SELECT cutoff_date FROM projects WHERE id = ?", (project_id,)
+            ).fetchone()["cutoff_date"]
+            dated_sources = self.conn.execute(
+                """
+                SELECT id, title, pub_date FROM sources
+                WHERE project_id = ? AND source_tier <> 'USER_NOTES'
+                ORDER BY id
+                """,
+                (project_id,),
+            ).fetchall()
+            invalid_dates: list[str] = []
+            try:
+                cutoff = date.fromisoformat(project_cutoff)
+            except (TypeError, ValueError):
+                cutoff = None
+                blockers.append("Current Affairs research cutoff must be a valid ISO date.")
+            for source in dated_sources:
+                try:
+                    published = date.fromisoformat(source["pub_date"]) if source["pub_date"] else None
+                except ValueError:
+                    published = None
+                if published is None:
+                    invalid_dates.append(source["id"])
+                elif cutoff and published > cutoff:
+                    invalid_dates.append(source["id"])
+            if invalid_dates:
+                blockers.append(
+                    "Current Affairs sources need a valid publication date on or before the project cutoff: "
+                    + ", ".join(invalid_dates[:8])
+                )
+
+        common_required_files = (
+            "teaching/script_hinglish.md",
+            "teaching/study_notes.md",
+            "teaching/question_bank.json",
+        )
+        category_required_files = (
+            ("teaching/prelims_track.md", "teaching/mains_track.md")
+            if content_category == "upsc"
+            else ("teaching/topic_context.md", "teaching/analysis_framework.md")
+        )
+        for req_file in (*common_required_files, *category_required_files):
+            target = self.project_dir / req_file
+            if not target.is_file() or target.stat().st_size == 0:
                 blockers.append(f"Missing required teaching deliverable: {req_file}")
 
         return {

@@ -1,0 +1,14 @@
+[
+  {"id":"upsc-explicit","worker":"topic_profile","input":{"category":"upsc"},"expected_status":"COMPLETED"},
+  {"id":"gk-no-upsc-boilerplate","worker":"topic_profile","input":{"category":"general_knowledge"},"expected_status":"COMPLETED"},
+  {"id":"current-affairs-needs-cutoff","worker":"topic_profile","input":{"category":"current_affairs"},"expected_status":"BLOCKED"},
+  {"id":"unknown-category","worker":"topic_profile","input":{"category":"guess"},"expected_status":"REVIEW_REQUIRED"},
+  {"id":"complete-concepts","worker":"coverage_audit","input":{"required_concepts":["photosynthesis","chlorophyll"],"script_text":"Photosynthesis uses chlorophyll to capture light."},"expected_status":"PASSED"},
+  {"id":"omitted-concept","worker":"coverage_audit","input":{"required_concepts":["photosynthesis","chlorophyll"],"script_text":"Photosynthesis converts light energy."},"expected_status":"FAILED"},
+  {"id":"empty-script","worker":"coverage_audit","input":{"required_concepts":["constitution"],"script_text":""},"expected_status":"BLOCKED"},
+  {"id":"claim-missing-citation","worker":"evidence_completeness_audit","input":{"claims":[{"text":"A claim","source_refs":[],"source_date":"2026-01-01"}]},"expected_status":"REVIEW_REQUIRED"},
+  {"id":"claim-complete-metadata","worker":"evidence_completeness_audit","input":{"claims":[{"text":"A claim","source_refs":["SRC-1"],"source_date":"2026-01-01"}]},"expected_status":"PASSED"},
+  {"id":"asset-unverified","worker":"rights_asset_audit","input":{"assets":[{"asset_ref":"A1","origin":"user_upload","rights_status":"UNKNOWN"}]},"expected_status":"FAILED"},
+  {"id":"asset-licensed","worker":"rights_asset_audit","input":{"assets":[{"asset_ref":"A1","source_url":"https://example.org/asset","rights_status":"LICENSED"}]},"expected_status":"PASSED"},
+  {"id":"release-no-approval","worker":"release_gate","input":{"gates":{"academic":{"status":"PASSED"}}},"expected_status":"BLOCKED"}
+]

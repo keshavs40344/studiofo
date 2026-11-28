@@ -79,9 +79,14 @@ class GraphicsGenerator:
         )
 
         # Scene title
-        wrapped_title = textwrap.wrap(scene.on_screen_title, width=48)
+        wrapped_title = textwrap.wrap(scene.on_screen_title, width=48) or [scene.on_screen_title]
         y = 112
-        for line in wrapped_title[:2]:
+        if len(wrapped_title) > 3:
+            raise ValueError(
+                f"{scene.scene_id}: title needs {len(wrapped_title)} lines; "
+                "shorten the authored title instead of silently clipping it."
+            )
+        for line in wrapped_title:
             draw.text((margin_x, y), line, fill=self.TEXT_PRIMARY, font=font_title)
             y += 66
 
@@ -90,12 +95,22 @@ class GraphicsGenerator:
         if "Flowchart" in scene.visual_category:
             self._draw_flowchart(draw, margin_x, y_content, width - 2 * margin_x, scene.on_screen_bullets, font_body)
         else:
-            self._draw_bullet_cards(draw, margin_x, y_content, width - 2 * margin_x, scene.on_screen_bullets, font_body)
+            self._draw_bullet_cards(
+                draw, margin_x, y_content, width - 2 * margin_x, scene.on_screen_bullets,
+                font_body, max_y=height - 124,
+            )
 
-        # Citation footer
-        citation_text = "Sources: " + ", ".join(scene.source_citations)
+        # Citation footer: wrap source text and fail rather than silently truncate.
+        citation_text = "Sources: " + ("; ".join(scene.source_citations) if scene.source_citations else "Attribution pending review")
+        footer_lines = textwrap.wrap(citation_text, width=116) or [citation_text]
+        if len(footer_lines) > 2:
+            raise ValueError(
+                f"{scene.scene_id}: source attribution does not fit the footer; "
+                "use concise source titles and retain full provenance in the project report."
+            )
         draw.line([(margin_x, height - 92), (width - margin_x, height - 92)], fill=self.CARD_COLOR, width=2)
-        draw.text((margin_x, height - 72), citation_text[:120], fill=self.TEXT_MUTED, font=font_footer)
+        for line_index, line in enumerate(footer_lines):
+            draw.text((margin_x, height - 72 + line_index * 24), line, fill=self.TEXT_MUTED, font=font_footer)
         draw.text((width - 260, height - 72), f"Scene {scene.scene_id}", fill=self.ACCENT_BLUE, font=font_footer)
 
         out_path = self.out_dir / f"{scene.scene_id}.png"
@@ -120,11 +135,17 @@ class GraphicsGenerator:
         box_w: int,
         bullets: list[str],
         font: ImageFont.ImageFont,
+        max_y: int,
     ) -> None:
         curr_y = y
         for idx, bullet in enumerate(bullets[:4], start=1):
-            lines = textwrap.wrap(bullet, width=74)[:2]
+            lines = textwrap.wrap(bullet, width=74) or [bullet]
             card_h = 44 + len(lines) * 44
+            if curr_y + card_h > max_y:
+                raise ValueError(
+                    f"Bullet card {idx} exceeds the safe content area; split the scene "
+                    "or shorten the authored on-screen copy."
+                )
             draw.rounded_rectangle(
                 [x, curr_y, x + box_w, curr_y + card_h],
                 radius=14,
@@ -148,7 +169,11 @@ class GraphicsGenerator:
         steps: list[str],
         font: ImageFont.ImageFont,
     ) -> None:
-        items = steps[:3] or ["Step 1: Trigger", "Step 2: Authority Review", "Step 3: Outcome & Check"]
+        if not steps:
+            raise ValueError("Flowchart graphic requires supplied, topic-specific steps.")
+        if len(steps) > 3:
+            raise ValueError("Flowchart graphic supports at most three nodes; split the scene rather than dropping steps.")
+        items = steps
         step_w = (total_w - 80) // max(1, len(items))
         box_h = 340
         for idx, step in enumerate(items):
@@ -162,7 +187,12 @@ class GraphicsGenerator:
             )
             draw.text((bx + 24, y + 84), f"STAGE {idx + 1}", fill=self.ACCENT_GOLD, font=font)
             ly = y + 146
-            for line in textwrap.wrap(step, width=24)[:4]:
+            wrapped_step = textwrap.wrap(step, width=24) or [step]
+            if len(wrapped_step) > 4:
+                raise ValueError(
+                    f"Flowchart node {idx + 1} exceeds its text area; split the node into another scene."
+                )
+            for line in wrapped_step:
                 draw.text((bx + 24, ly), line, fill=self.TEXT_PRIMARY, font=font)
                 ly += 44
             if idx < len(items) - 1:

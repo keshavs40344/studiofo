@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import math
 import struct
 import wave
@@ -65,7 +66,9 @@ def test_end_to_end_waiting_for_voice_then_full_mp4_render(tmp_path: Path) -> No
     res_no_voice = pipeline.run_pipeline(proj.id, notes_files=[sample_notes])
     assert res_no_voice["status"] == "WAITING_FOR_VOICE"
     assert Path(res_no_voice["recording_script"]).exists()
-    assert res_no_voice["scenes_count"] == 5
+    storyboard_data = json.loads((proj_dir / "storyboard" / "storyboard.json").read_text(encoding="utf-8"))
+    assert res_no_voice["scenes_count"] == len(storyboard_data)
+    assert res_no_voice["scenes_count"] >= 1
     assert res_no_voice["qa"]["rights"]["status"] == "PASSED"
 
     # Stage B: Verify claims properly with official source, then supply own voice WAV
@@ -134,4 +137,12 @@ def test_fastapi_dashboard_and_api(tmp_path: Path) -> None:
         data={"typed_notes": "RBI Monetary Policy Committee sets repo rate under RBI Act 1934."},
     )
     assert r_run.status_code == 200
-    assert r_run.json()["status"] == "WAITING_FOR_VOICE"
+    run_result = r_run.json()
+    assert run_result["status"] == "WAITING_FOR_VOICE"
+    assert run_result["workflow"]["status"] == "COMPLETED"
+    assert run_result["workflow"]["task_count"] == 4
+    assert run_result["agent_states"]["AGENT_01"]["status"] == "BLOCKED"
+    assert run_result["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
+    assert run_result["agent_states"]["AGENT_23"]["status"] == "BLOCKED"
+    assert run_result["youtube_publish"]["status"] == "PENDING_VIDEO_RENDER"
+    assert run_result["youtube_publish"]["upload_attempted"] is False

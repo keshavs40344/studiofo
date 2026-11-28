@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 import subprocess
 import uuid
@@ -72,6 +73,8 @@ class VideoRenderer:
                 cmd = [ffmpeg_exe, "-y"]
                 if not is_video_asset:
                     cmd.extend(["-loop", "1"])
+                else:
+                    cmd.extend(["-stream_loop", "-1"])
                 cmd.extend(
                     [
                         "-i",
@@ -192,6 +195,51 @@ class VideoRenderer:
             encoding="utf-8",
         )
         return manifest
+
+    @staticmethod
+    def render_dubbed_variant(
+        project_dir: Path,
+        language_code: str,
+        base_video: Path,
+        narration_wav: Path,
+        subtitles_srt: Path,
+    ) -> dict:
+        """Mux a separately generated language narration onto the approved picture edit."""
+        ffmpeg = find_ffmpeg()
+        if not ffmpeg:
+            raise RuntimeError("FFmpeg executable not found.")
+        if not base_video.is_file():
+            raise FileNotFoundError(f"Base documentary video not found: {base_video}")
+        if not narration_wav.is_file() or not subtitles_srt.is_file():
+            raise FileNotFoundError("Translated narration and subtitles are required.")
+        if not re.fullmatch(r"[a-z]{2}", language_code.lower()):
+            raise ValueError("Language code must be a two-letter ISO 639-1 code.")
+        output_dir = Path(project_dir) / "render" / "languages" / language_code.lower()
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_video = output_dir / f"documentary_{language_code.lower()}.mp4"
+        command = [
+            ffmpeg, "-y", "-i", str(base_video), "-i", str(narration_wav),
+            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy",
+            "-c:a", "aac", "-b:a", "192k", "-shortest",
+            "-movflags", "+faststart", str(output_video),
+        ]
+        subprocess.run(
+            command, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
+        )
+        if not output_video.is_file() or output_video.stat().st_size == 0:
+            raise RuntimeError("FFmpeg did not create the language-specific documentary.")
+        return {
+            "status": "DUBBED_VIDEO_RENDERED",
+            "language_code": language_code.lower(),
+            "video_path": str(output_video),
+            "subtitle_path": str(subtitles_srt),
+            "base_video": str(base_video),
+            "file_size_bytes": output_video.stat().st_size,
+            "video_stream_source": "BASE_DOCUMENTARY",
+            "audio_stream_source": "TRANSLATED_PIPER_NARRATION",
+            "subtitles_embedded": False,
+            "subtitles_sidecar": True,
+        }
 
     def _assemble_with_xfade(
         self,

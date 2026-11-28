@@ -31,6 +31,7 @@ class PiperTTSEngine:
         self.project_dir = project_dir
         self.tts_python = PROJECT_ROOT / ".venv_tts" / "Scripts" / "python.exe"
         self.model_path = PROJECT_ROOT / "data" / "tts_models" / "piper" / "hi_IN-pratham-medium.onnx"
+        self.english_model_path = PROJECT_ROOT / "data" / "tts_models" / "piper" / "en_US-ryan-medium.onnx"
         self.seg_dir = project_dir / "audio" / "narration_segments"
         self.proc_dir = project_dir / "audio" / "processed"
         self.sub_dir = project_dir / "subtitles"
@@ -94,8 +95,9 @@ class PiperTTSEngine:
             )
 
         if use_piper:
-            engine_name = "piper_hi_IN-pratham-medium"
-            model_license = "MIT (rhasspy/piper-voices hi_IN-pratham-medium)"
+            has_en = self.english_model_path.is_file()
+            engine_name = "piper_en_US-ryan-medium + hi_IN-pratham-medium" if has_en else "piper_hi_IN-pratham-medium"
+            model_license = "MIT (rhasspy/piper-voices)"
         else:
             engine_name = f"windows_sapi_hindi_{sapi_hindi}"
             model_license = "Windows SAPI Hindi Voice"
@@ -104,14 +106,22 @@ class PiperTTSEngine:
         raw_seg_wavs: list[Path] = []
         seg_durations: list[float] = []
 
+        import re
         for scene in scenes:
             spoken_text, applied_terms = self.normalizer.normalize(scene.narration_text)
+            # Clean up common scholarly/chronological notation for natural TTS reading
+            spoken_text = re.sub(r"\bc\.\s*(\d+)", r"circa \1", spoken_text)
+            spoken_text = re.sub(r"(\d+):(\d+):(\d+)", r"\1 to \2 to \3", spoken_text)
+            spoken_text = spoken_text.replace("cire perdue", "seer perdoo").replace("boustrophedon", "boo-stro-fee-don")
             pron_reports.append({"scene_id": scene.scene_id, "applied_terms": applied_terms})
+
+            has_devanagari = bool(re.search(r"[\u0900-\u097F]", spoken_text))
+            chosen_model = self.model_path if (has_devanagari or not self.english_model_path.is_file()) else self.english_model_path
 
             seg_wav = self.seg_dir / f"{scene.scene_id}.wav"
             if use_piper:
                 try:
-                    self._run_piper(spoken_text, seg_wav)
+                    self._run_piper(spoken_text, seg_wav, model_path=chosen_model)
                 except Exception:
                     if sapi_hindi:
                         self._run_sapi(scene.narration_text, seg_wav, voice_name=sapi_hindi)
@@ -198,7 +208,147 @@ class PiperTTSEngine:
 
         return quality_report
 
-    def _run_piper(self, text: str, out_wav: Path) -> None:
+    @classmethod
+    def inventory_piper_models(cls, model_dir: Path | None = None) -> list[dict[str, Any]]:
+        """List installed Piper voices without creating or mutating a project workspace."""
+        root = Path(model_dir) if model_dir is not None else PROJECT_ROOT / "data" / "tts_models" / "piper"
+        manifest_path = root / "voice_licenses.json"
+        try:
+            license_manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+        except (OSError, json.JSONDecodeError):
+            license_manifest = {}
+        models: list[dict[str, Any]] = []
+        for path in sorted(root.glob("*.onnx")):
+            config_path = Path(str(path) + ".json")
+            locale = path.stem.split("-", 1)[0]
+            language_code = locale.split("_", 1)[0].lower()
+            licence_data = license_manifest.get(path.name, {})
+            if not isinstance(licence_data, dict):
+                licence_data = {}
+            models.append({
+                "model_file": path.name,
+                "model_path": str(path),
+                "locale": locale,
+                "language_code": language_code,
+                "config_present": config_path.is_file(),
+                "license": licence_data.get("license"),
+                "attribution": licence_data.get("attribution"),
+                "commercial_use": licence_data.get("commercial_use") is True,
+                "license_confirmed_by": licence_data.get("confirmed_by"),
+                "usable_for_dubbing": bool(
+                    config_path.is_file()
+                    and licence_data.get("license")
+                    and licence_data.get("attribution")
+                    and licence_data.get("commercial_use") is True
+                    and licence_data.get("confirmed_by")
+                ),
+            })
+        return models
+
+    def discover_piper_models(self) -> list[dict[str, Any]]:
+        """List Piper models beneath this runtime's configured model directory."""
+        return self.inventory_piper_models(self.model_path.parent)
+
+    def synthesize_translated_scenes(
+        self,
+        project_id: str,
+        scenes: list[SceneSpec],
+        translated_texts: list[str],
+        language_code: str,
+        model_path: Path,
+    ) -> dict[str, Any]:
+        """Create a language-specific narration only from an installed, licensed Piper model."""
+        if len(scenes) != len(translated_texts) or not scenes:
+            raise ValueError("Translated text count must match a non-empty scene list.")
+        resolved_model = Path(model_path).expanduser().resolve()
+        model_root = self.model_path.parent.resolve()
+        try:
+            resolved_model.relative_to(model_root)
+        except ValueError as exc:
+            raise ValueError("Piper voice model must be installed inside the configured model directory.") from exc
+        model = next((item for item in self.discover_piper_models() if Path(item["model_path"]).resolve() == resolved_model), None)
+        if model is None:
+            raise FileNotFoundError("Requested Piper voice model is not installed.")
+        if model["language_code"] != language_code.lower():
+            raise ValueError(
+                f"Voice model language '{model['language_code']}' does not match target '{language_code}'."
+            )
+        if not model["usable_for_dubbing"]:
+            raise PermissionError(
+                "Voice model licence is not cleared. Add its exact licence, attribution, commercial_use=true "
+                "and confirmed_by fields to voice_licenses.json after reviewing the model licence."
+            )
+        if not self.tts_python.is_file():
+            raise RuntimeError(f"Isolated Piper runtime is missing: {self.tts_python}")
+        ffmpeg = find_ffmpeg()
+        if not ffmpeg:
+            raise RuntimeError("FFmpeg is required to assemble translated narration.")
+
+        output_dir = self.project_dir / "audio" / "multilingual" / language_code.lower()
+        segment_dir = output_dir / "segments"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        segment_dir.mkdir(parents=True, exist_ok=True)
+        segment_paths: list[Path] = []
+        for index, text in enumerate(translated_texts, start=1):
+            if not text.strip():
+                raise ValueError(f"Translated narration segment {index} is empty.")
+            segment_path = segment_dir / f"scene_{index:03d}.wav"
+            self._run_piper(text, segment_path, model_path=resolved_model)
+            segment_paths.append(segment_path)
+
+        concat_file = segment_dir / "concat.txt"
+        concat_file.write_text(
+            "\n".join(f"file '{path.resolve().as_posix()}'" for path in segment_paths),
+            encoding="utf-8",
+        )
+        narration = output_dir / "narration.wav"
+        subprocess.run(
+            [
+                ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file),
+                "-af", "highpass=f=80,loudnorm=I=-16:TP=-1.5:LRA=11",
+                "-ar", "44100", "-ac", "1", str(narration),
+            ],
+            check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+        )
+        metrics = self.audio_proc._measure_audio(ffmpeg, narration)
+        translated_scenes = [
+            scene.model_copy(update={"narration_text": translated})
+            for scene, translated in zip(scenes, translated_texts)
+        ]
+        subtitle_path = output_dir / "subtitles.srt"
+        self.audio_proc.generate_subtitles(
+            translated_scenes, total_audio_sec=metrics["duration_sec"], output_path=subtitle_path
+        )
+        report = {
+            "status": "DUBBED_AUDIO_READY",
+            "project_id": project_id,
+            "language_code": language_code.lower(),
+            "model_file": model["model_file"],
+            "model_license": model["license"],
+            "model_attribution": model["attribution"],
+            "voice_cloning_used": False,
+            "narration_wav": str(narration),
+            "subtitles_srt": str(subtitle_path),
+            "segment_count": len(segment_paths),
+            **metrics,
+        }
+        (output_dir / "voice_quality_report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        if self.rights_ledger is not None:
+            self.rights_ledger.register_asset(
+                project_id=project_id,
+                asset_type="multilingual_ai_tts_narration",
+                file_path=narration,
+                creator=f"Piper model {model['model_file']}",
+                licence=str(model["license"]),
+                rights_status=RightsStatus.LICENSED,
+                attribution=str(model["attribution"]),
+            )
+        return report
+
+    def _run_piper(self, text: str, out_wav: Path, model_path: Path | None = None) -> None:
+        selected_model = model_path or self.model_path
         script = (
             "import sys, wave\n"
             "from piper.voice import PiperVoice\n"
@@ -209,7 +359,7 @@ class PiperTTSEngine:
         )
         env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
         subprocess.run(
-            [str(self.tts_python), "-c", script, str(self.model_path), str(out_wav)],
+            [str(self.tts_python), "-c", script, str(selected_model), str(out_wav)],
             input=text,
             text=True,
             encoding="utf-8",

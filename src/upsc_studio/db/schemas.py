@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -65,8 +65,9 @@ class QAGateStatus(str, Enum):
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=2, max_length=120)
     chapter_title: str = Field(..., min_length=2, max_length=200)
+    content_category: Literal["upsc", "general_knowledge", "current_affairs", "deep_dive"] = "upsc"
     exam_cycle: str = Field(default="UPSC CSE 2026")
-    cutoff_date: str = Field(default="2026-11-26")
+    cutoff_date: str = Field(default_factory=lambda: datetime.now().astimezone().date().isoformat())
     target_duration_min: int = Field(default=30, ge=1, le=180)
     tts_enabled: bool = Field(default=False)
 
@@ -114,3 +115,63 @@ class SceneSpec(BaseModel):
     source_citations: list[str] = Field(default_factory=list)
     qc_status: str = "PENDING"
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+class YouTubePublishRequest(BaseModel):
+    privacy_status: Literal["private", "unlisted", "public"] = "private"
+    approver: str = Field(..., min_length=2, max_length=120)
+    confirm_publish: bool = False
+
+
+class DubLanguageRequest(BaseModel):
+    target_language: Literal["en", "hi", "bn", "ta", "te", "mr", "gu", "kn", "ml", "pa", "or"]
+
+
+class ResearchDiscoveryRequest(BaseModel):
+    query: str = Field(..., min_length=4, max_length=300)
+    limit: int = Field(default=8, ge=1, le=10)
+
+
+class ResearchSourceCreate(BaseModel):
+    title: str = Field(..., min_length=3, max_length=300)
+    publisher: str = Field(..., min_length=2, max_length=200)
+    source_tier: Literal[
+        "PRIMARY_OFFICIAL", "ACADEMIC_PEER_REVIEWED", "REPUTABLE_NEWS", "OTHER"
+    ]
+    url: str = Field(..., min_length=8, max_length=2000)
+    pub_date: str | None = Field(default=None, max_length=40)
+    notes: str = Field(default="", max_length=3000)
+
+
+class ResearchClaimCreate(BaseModel):
+    statement: str = Field(..., min_length=20, max_length=3000)
+    chapter_section: str = Field(..., min_length=2, max_length=200)
+    source_id: str | None = None
+    page_or_section: str | None = Field(default=None, max_length=300)
+    ref_period: str | None = Field(default=None, max_length=100)
+
+
+class ClaimVerificationRequest(BaseModel):
+    source_id: str = Field(..., min_length=4, max_length=80)
+    page_or_section: str = Field(..., min_length=2, max_length=300)
+    evidence_excerpt: str = Field(..., min_length=10, max_length=5000)
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    ref_period: str | None = Field(default=None, max_length=100)
+
+
+class ManualRetryRequest(BaseModel):
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    reason: str = Field(..., min_length=5, max_length=1000)
+    partial_outputs_inspected: bool = False
+
+
+class ManualQAReview(BaseModel):
+    """Explicit creator checklist for quality items automation cannot certify."""
+
+    reviewer: str = Field(..., min_length=2, max_length=120)
+    content_scope_coverage: bool = False
+    teaching_clarity: bool = False
+    visual_relevance: bool = False
+    voice_subtitle_alignment: bool = False
+    final_playback_inspection: bool = False
+    notes: str = Field(default="", max_length=2000)
+

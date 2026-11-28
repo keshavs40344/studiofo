@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from upsc_studio.academic.specialists import SpecialistProfileEngine
@@ -49,7 +50,15 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         proj.id,
         proj_dir,
         proj.chapter_title,
-        notes_text="Part III Articles 12-35 Fundamental Rights and Article 32 Writs jurisdiction of Supreme Court.",
+        notes_text=(
+            "Part III (Articles 12-35) of the Constitution of India defines Fundamental Rights as enforceable "
+            "guarantees against arbitrary state action. The mechanism of constitutional enforcement is established "
+            "under Article 32, which refers to the prerogative writs issued by the Supreme Court, for example "
+            "Habeas Corpus, Mandamus, Prohibition, Quo-Warranto, and Certiorari. In cases such as Maneka Gandhi (1978), "
+            "the Supreme Court expanded Article 21, establishing that procedure established by law must be just, "
+            "fair, and reasonable. The significance of this framework lies in balancing state authority with individual "
+            "liberty, resolving the challenge of executive overreach while preserving judicial review as a basic structure feature."
+        ),
     )
     assert any("GS Paper II" in p or "GS-II" in p for p in cmap["primary_papers"])
 
@@ -68,6 +77,7 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         title="Supreme Court Judgment — Maneka Gandhi vs Union of India (1978)",
         publisher="Supreme Court of India",
         source_tier="PRIMARY_OFFICIAL",
+        url="https://main.sci.gov.in/",
         pub_date="1978-01-25",
     )
 
@@ -111,18 +121,19 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         target_duration_min=8,
         tts_enabled=True,
     )
-    assert pkg["sections_count"] == 7  # Expanded 7 sections for 8-min target
+    assert pkg["sections_count"] == 5  # Fixed evidence-safe lesson structure; no invented duration filler
 
     # 4. Duration Schedule
     planner = DurationPlanner(teaching_engine.WORDS_PER_MINUTE)
     sched = planner.build_schedule(proj_dir, pkg["sections"], target_duration_min=8)
     assert sched["target_duration_min"] == 8
-    assert len(sched["sections"]) == 7
+    assert len(sched["sections"]) == 5
 
     # 5. Visual Storyboard and Diverse Graphics
     director = StoryboardDirector(proj_dir)
     scenes = director.build_storyboard(proj.chapter_title, pkg["sections"])
-    assert len(scenes) == 7
+    assert len(scenes) > len(pkg["sections"])  # Long sections expand into documentary beats
+    assert len({scene.scene_id for scene in scenes}) == len(scenes)
 
     rights = AssetRightsLedger(conn, proj_dir)
     anim_engine = AnimationEngine(proj_dir, rights)
@@ -216,7 +227,24 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
         assert qa["media"]["status"] == "PASSED"
         assert qa["publication"]["status"] == "PASSED"
 
-        ten_gates = TenGateAuditor(conn, proj_dir).run_ten_gates(proj.id, scenes, final_mp4, human_approved_by="Lead Instructor")
+        # Record human review certification for pedagogical and visual inspection
+        auditor_10 = TenGateAuditor(conn, proj_dir)
+        fp = auditor_10.review_fingerprint(proj.id, scenes, final_mp4)
+        review = {
+            "reviewer": "Lead Instructor",
+            "artifact_fingerprint": fp,
+            "checks": {
+                "content_scope_coverage": True,
+                "teaching_clarity": True,
+                "visual_relevance": True,
+                "voice_subtitle_alignment": True,
+                "final_playback_inspection": True,
+            },
+            "reviewed_at": "2026-11-26T12:00:00+00:00",
+        }
+        (proj_dir / "qa" / "manual_review.json").write_text(json.dumps(review), encoding="utf-8")
+
+        ten_gates = auditor_10.run_ten_gates(proj.id, scenes, final_mp4, human_approved_by="Lead Instructor")
         assert ten_gates["all_gates_passed"] is True
         assert ten_gates["ready_for_publication"] == "PASSED"
     else:
