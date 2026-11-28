@@ -152,7 +152,9 @@ class DocumentaryAnimationSuite:
         w, h = spec["width"], spec["height"]
         margins = spec["margins"]
 
-        items = milestones[:4] or [("1950", "Inception"), ("1978", "Expansion"), ("1992", "Judicial Review")]
+        if len(milestones) < 2:
+            raise ValueError("A historical timeline requires at least two sourced milestones.")
+        items = milestones[:8]
         frames: list[Image.Image] = []
 
         for reveal_count in range(1, len(items) + 1):
@@ -274,7 +276,9 @@ class DocumentaryAnimationSuite:
         w, h = spec["width"], spec["height"]
         margins = spec["margins"]
 
-        active_steps = steps[:4] or ["Phase 1: Initiation", "Phase 2: Deliberation", "Phase 3: Promulgation"]
+        if not steps:
+            raise ValueError("A process demonstration requires at least one supplied step.")
+        active_steps = steps[:4]
         frames: list[Image.Image] = []
 
         for count in range(1, len(active_steps) + 1):
@@ -386,7 +390,9 @@ class DocumentaryAnimationSuite:
         w, h = spec["width"], spec["height"]
         margins = spec["margins"]
 
-        items = institutions[:3] or [("Union Executive", "Policy Mandate"), ("Parliament", "Legislative Oversight"), ("Supreme Court", "Judicial Review")]
+        if not institutions:
+            raise ValueError("Institutional relationship rendering requires named, supplied institutions.")
+        items = institutions[:3]
         frames: list[Image.Image] = []
 
         for count in range(1, len(items) + 1):
@@ -435,7 +441,9 @@ class DocumentaryAnimationSuite:
         w, h = spec["width"], spec["height"]
         margins = spec["margins"]
 
-        items = territories[:3] or [("Northern Zone", "Himalayan Watershed"), ("Central Zone", "Peninsular Plateau"), ("Coastal Zone", "Maritime Basin")]
+        if len(territories) < 2:
+            raise ValueError("Region-card rendering requires at least two supplied, sourced regions.")
+        items = territories[:8]
         frames: list[Image.Image] = []
 
         for count in range(1, len(items) + 1):
