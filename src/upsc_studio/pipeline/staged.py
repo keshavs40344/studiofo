@@ -491,23 +491,53 @@ class StagedChapterPipeline:
         for idx, scene in enumerate(scenes):
             vtype = str((scene.metadata or {}).get("visual_type") or "").upper()
             bullets = scene.on_screen_bullets or [scene.learning_objective or project.chapter_title]
-            citation = ", ".join(scene.source_citations[:3]) or "Verified Sources"
+            citation = ", ".join(scene.source_citations[:3]) or "Source citation pending review"
             clip_dur = min(10.0, max(5.0, float(scene.estimated_duration_sec)))
 
             if idx == 0:
                 asset = graphics.generate_scene_graphic(project_id, project.chapter_title, scene)
                 scene.primary_asset = str(asset)
             elif vtype == "HISTORICAL_TIMELINE":
-                events = [{"date": f"Phase {i+1}", "label": b[:65]} for i, b in enumerate(bullets[:4])]
-                asset = doc_anim.render_timeline_progression(
-                    project_id, scene.scene_id, scene.section_title, events, citation, duration_sec=clip_dur
+                raw_events = (scene.metadata or {}).get("timeline_events")
+                events = (
+                    [item for item in raw_events if isinstance(item, dict)
+                     and str(item.get("date", "")).strip()
+                     and str(item.get("label", "")).strip()][:8]
+                    if isinstance(raw_events, list) else []
                 )
+                if len(events) >= 2 and scene.source_citations:
+                    asset = doc_anim.render_timeline_progression(
+                        project_id, scene.scene_id, scene.section_title, events, citation, duration_sec=clip_dur
+                    )
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["visual_data_warning"] = (
+                        "Timeline animation withheld: at least two dated events and source citations are required."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype == "GEOGRAPHICAL_MAP":
-                regions = [{"name": f"Region {i+1}", "detail": b[:65]} for i, b in enumerate(bullets[:4])]
-                asset = doc_anim.render_map_explanation(
-                    project_id, scene.scene_id, scene.section_title, regions, citation, duration_sec=clip_dur
+                raw_regions = (scene.metadata or {}).get("map_regions")
+                regions = (
+                    [item for item in raw_regions if isinstance(item, dict)
+                     and str(item.get("name", "")).strip()
+                     and str(item.get("detail", "")).strip()][:8]
+                    if isinstance(raw_regions, list) else []
                 )
+                if len(regions) >= 2 and scene.source_citations:
+                    asset = doc_anim.render_map_explanation(
+                        project_id, scene.scene_id, scene.section_title, regions, citation, duration_sec=clip_dur
+                    )
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["visual_data_warning"] = (
+                        "Geographical map withheld: sourced map-region metadata is required."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype in {"SPLIT_COMPARISON", "BEFORE_AFTER"}:
                 mid = max(1, len(bullets) // 2)
@@ -541,10 +571,27 @@ class StagedChapterPipeline:
                 )
                 scene.primary_asset = str(asset)
             elif vtype in {"DATA_VISUALISATION", "STATISTICAL_COMPARISON"}:
-                bars = [{"label": f"Fact {i+1}", "value": 85 - i * 12, "unit": "%"} for i in range(min(4, len(bullets)))]
-                asset = doc_anim.render_statistical_comparison(
-                    project_id, scene.scene_id, scene.section_title, bars, citation, duration_sec=clip_dur
+                raw_bars = (scene.metadata or {}).get("chart_data")
+                bars = (
+                    [item for item in raw_bars if isinstance(item, dict)
+                     and str(item.get("label", "")).strip()
+                     and isinstance(item.get("value"), (int, float))
+                     and not isinstance(item.get("value"), bool)
+                     and str(item.get("unit", "")).strip()][:8]
+                    if isinstance(raw_bars, list) else []
                 )
+                if len(bars) >= 2 and scene.source_citations:
+                    asset = doc_anim.render_statistical_comparison(
+                        project_id, scene.scene_id, scene.section_title, bars, citation, duration_sec=clip_dur
+                    )
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["visual_data_warning"] = (
+                        "Statistical chart withheld: sourced numeric chart_data and citations are required."
+                    )
                 scene.primary_asset = str(asset)
             else:
                 asset = doc_anim.render_process_demonstration(
