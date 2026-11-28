@@ -108,6 +108,10 @@ def audit_documentary_scenes(scenes: list[SceneSpec]) -> dict[str, Any]:
             scene_blockers.append(f"{scene.scene_id}: {visual_warning}")
 
         citation_records = metadata.get("citation_records")
+        if scene.claim_ids and metadata.get("citation_status") != "VERIFIED_EXTERNAL_SOURCE_LINKED":
+            scene_blockers.append(
+                f"{scene.scene_id}: factual claim IDs are not linked to verified external source records."
+            )
         if expected_kind:
             if not isinstance(citation_records, list) or not citation_records:
                 scene_blockers.append(
