@@ -132,7 +132,8 @@ def test_fundamental_rights_8min_documentary_production(tmp_path: Path) -> None:
     # 5. Visual Storyboard and Diverse Graphics
     director = StoryboardDirector(proj_dir)
     scenes = director.build_storyboard(proj.chapter_title, pkg["sections"])
-    assert len(scenes) == 5
+    assert len(scenes) > len(pkg["sections"])  # Long sections expand into documentary beats
+    assert len({scene.scene_id for scene in scenes}) == len(scenes)
 
     rights = AssetRightsLedger(conn, proj_dir)
     anim_engine = AnimationEngine(proj_dir, rights)
