@@ -583,40 +583,52 @@ class StagedChapterPipeline:
             elif vtype == "GEOGRAPHICAL_MAP":
                 raw_geojson = (scene.metadata or {}).get("map_geojson")
                 geojson_data: dict[str, Any] | None = None
+                map_input_error: str | None = None
                 if isinstance(raw_geojson, dict):
                     geojson_data = raw_geojson
                 elif isinstance(raw_geojson, str) and raw_geojson.strip():
                     supplied_path = Path(raw_geojson).expanduser().resolve()
                     try:
                         supplied_path.relative_to(project_dir.resolve())
+                        if not supplied_path.is_file():
+                            map_input_error = "The supplied GeoJSON file does not exist in the project workspace."
+                        else:
+                            geojson_data = json.loads(supplied_path.read_text(encoding="utf-8"))
                     except ValueError as exc:
-                        raise ValueError("Map GeoJSON path must be inside the project workspace.") from exc
-                    if supplied_path.is_file():
-                        geojson_data = json.loads(supplied_path.read_text(encoding="utf-8"))
+                        map_input_error = str(exc)
+                    except (OSError, json.JSONDecodeError) as exc:
+                        map_input_error = f"GeoJSON could not be loaded: {type(exc).__name__}"
 
                 citation_record = citation_records[0] if citation_records else {}
                 source_url = str(citation_record.get("url") or "").strip()
+                map_failure: str | None = map_input_error
                 if geojson_data and scene.source_citations and source_url:
-                    asset = geojson_maps.render(
-                        project_id=project_id,
-                        scene_id=scene.scene_id,
-                        title=scene.section_title,
-                        geojson=geojson_data,
-                        source_citation=citation,
-                        source_url=source_url,
-                        reference_date=str(scene.metadata.get("map_reference_date") or "") or None,
-                    )
-                    scene.metadata["rendered_visual_kind"] = "GEOGRAPHIC_MAP"
+                    try:
+                        asset = geojson_maps.render(
+                            project_id=project_id,
+                            scene_id=scene.scene_id,
+                            title=scene.section_title,
+                            geojson=geojson_data,
+                            source_citation=citation,
+                            source_url=source_url,
+                            reference_date=str(scene.metadata.get("map_reference_date") or "") or None,
+                        )
+                        scene.metadata["rendered_visual_kind"] = "GEOGRAPHIC_MAP"
+                    except (ValueError, OSError) as exc:
+                        map_failure = f"GeoJSON map rejected: {exc}"
                 else:
+                    map_failure = map_failure or (
+                        "A project-local GeoJSON FeatureCollection, named features, and a linked external source URL are required."
+                    )
+
+                if map_failure:
                     asset = doc_anim.render_process_demonstration(
                         project_id, scene.scene_id, scene.section_title, bullets[:4],
                         citation, duration_sec=clip_dur
                     )
                     scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_MAP"
                     scene.metadata["visual_data_warning"] = (
-                        "Geographical map requested but a project-local GeoJSON FeatureCollection, "
-                        "named features, and a linked external source URL were not supplied. "
-                        "This fallback is a draft only and blocks publication."
+                        f"{map_failure} This fallback is a draft only and blocks publication."
                     )
                 scene.primary_asset = str(asset)
             elif vtype in {"SPLIT_COMPARISON", "BEFORE_AFTER"}:
