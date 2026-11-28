@@ -38,6 +38,77 @@ class DocumentaryAnimationSuite:
         data = f"{name}|" + "|".join(f"{k}:{v}" for k, v in sorted(kwargs.items()))
         return hashlib.sha256(data.encode("utf-8")).hexdigest()[:12]
 
+    @staticmethod
+    def _draw_wrapped_text(
+        draw: ImageDraw.ImageDraw,
+        text: str,
+        position: tuple[int, int],
+        font: Any,
+        fill: tuple[int, int, int],
+        max_width: int,
+        max_lines: int = 2,
+        line_gap: int = 6,
+    ) -> int:
+        """Word-wrap with measured pixel widths; raise instead of cropping text."""
+        value = str(text or "").strip()
+        if not value:
+            return 0
+        lines: list[str] = []
+        current = ""
+
+        def fits(candidate: str) -> bool:
+            return draw.textlength(candidate, font=font) <= max_width
+
+        for word in value.split():
+            candidate = f"{current} {word}".strip()
+            if fits(candidate):
+                current = candidate
+                continue
+            if current:
+                lines.append(current)
+                current = ""
+            if fits(word):
+                current = word
+                continue
+            # Preserve long technical tokens by breaking them at character boundaries.
+            chunk = ""
+            for char in word:
+                if chunk and not fits(chunk + char):
+                    lines.append(chunk)
+                    chunk = ""
+                chunk += char
+            current = chunk
+        if current:
+            lines.append(current)
+
+        if len(lines) > max_lines:
+            raise ValueError(
+                f"Text needs {len(lines)} lines but layout permits {max_lines}; "
+                "split the scene or reduce authored on-screen copy."
+            )
+        bbox = font.getbbox("Ag")
+        line_height = max(1, bbox[3] - bbox[1]) + line_gap
+        x, y = position
+        for index, line in enumerate(lines):
+            draw.text((x, y + index * line_height), line, fill=fill, font=font)
+        return len(lines) * line_height
+
+    @classmethod
+    def _draw_source_footer(
+        cls,
+        draw: ImageDraw.ImageDraw,
+        source_citation: str,
+        x: int,
+        y: int,
+        max_width: int,
+        font: Any,
+    ) -> None:
+        label = f"Source: {source_citation}" if source_citation else "Source attribution pending review"
+        cls._draw_wrapped_text(
+            draw, label, (x, y), font, ColorPalette.TEXT_MUTED,
+            max_width=max_width, max_lines=2, line_gap=2,
+        )
+
     def _render_frames_to_mp4(
         self,
         frames: list[Image.Image],
@@ -154,7 +225,9 @@ class DocumentaryAnimationSuite:
 
         if len(milestones) < 2:
             raise ValueError("A historical timeline requires at least two sourced milestones.")
-        items = milestones[:8]
+        if len(milestones) > 8:
+            raise ValueError("Timeline supports at most eight milestones; split the timeline into scenes.")
+        items = milestones
         frames: list[Image.Image] = []
 
         for reveal_count in range(1, len(items) + 1):
@@ -168,7 +241,7 @@ class DocumentaryAnimationSuite:
 
             draw.rectangle([0, 0, w, 8], fill=ColorPalette.ACCENT_GOLD)
             draw.text((margins.margin_x, margins.margin_top - 36), "TIMELINE PROGRESSION", fill=ColorPalette.ACCENT_GOLD, font=f_tag)
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
 
             gap_y = int((h - margins.margin_bottom - (margins.margin_top + 80)) / max(1, len(items)))
             for idx in range(reveal_count):
@@ -181,9 +254,9 @@ class DocumentaryAnimationSuite:
                     draw.line([(margins.margin_x + 14, curr_y + 36), (margins.margin_x + 14, curr_y + gap_y + 8)], fill=ColorPalette.BORDER_FOCUS, width=4)
 
                 draw.text((margins.margin_x + 50, curr_y), m_date, fill=color, font=f_date)
-                draw.text((margins.margin_x + 50, curr_y + 36), m_desc[:60], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, m_desc, (margins.margin_x + 50, curr_y + 36), f_body, ColorPalette.TEXT_PRIMARY, max_width=w - margins.margin_x - (margins.margin_x + 50), max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -238,7 +311,7 @@ class DocumentaryAnimationSuite:
 
             draw.rectangle([0, 0, w, 8], fill=ColorPalette.ACCENT_SKY)
             draw.text((margins.margin_x, margins.margin_top - 36), "CAUSE & EFFECT ANALYSIS", fill=ColorPalette.ACCENT_SKY, font=f_tag)
-            draw.text((margins.margin_x, margins.margin_top), title[:54], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
 
             box_w = w - 2 * margins.margin_x
             box_h = 130
@@ -248,9 +321,9 @@ class DocumentaryAnimationSuite:
                 curr_y = y_start + idx * (box_h + 36)
                 draw.rounded_rectangle([margins.margin_x, curr_y, margins.margin_x + box_w, curr_y + box_h], radius=14, fill=ColorPalette.SURFACE_CARD, outline=s_color, width=3)
                 draw.text((margins.margin_x + 28, curr_y + 18), s_lbl, fill=s_color, font=f_step)
-                draw.text((margins.margin_x + 28, curr_y + 68), s_text[:75], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, s_text, (margins.margin_x + 28, curr_y + 68), f_body, ColorPalette.TEXT_PRIMARY, max_width=box_w - 56, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -278,7 +351,9 @@ class DocumentaryAnimationSuite:
 
         if not steps:
             raise ValueError("A process demonstration requires at least one supplied step.")
-        active_steps = steps[:4]
+        if len(steps) > 4:
+            raise ValueError("Process animation supports at most four steps; split the process into scenes.")
+        active_steps = steps
         frames: list[Image.Image] = []
 
         for count in range(1, len(active_steps) + 1):
@@ -292,7 +367,7 @@ class DocumentaryAnimationSuite:
 
             draw.rectangle([0, 0, w, 8], fill=ColorPalette.ACCENT_GOLD)
             draw.text((margins.margin_x, margins.margin_top - 36), "STEP-BY-STEP PROCESS DEMONSTRATION", fill=ColorPalette.ACCENT_GOLD, font=f_tag)
-            draw.text((margins.margin_x, margins.margin_top), title[:54], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
 
             box_w = w - 2 * margins.margin_x
             box_h = 110
@@ -304,9 +379,9 @@ class DocumentaryAnimationSuite:
                 fill_color = ColorPalette.SURFACE_ELEVATED if is_active else ColorPalette.SURFACE_CARD
                 draw.rounded_rectangle([margins.margin_x, curr_y, margins.margin_x + box_w, curr_y + box_h], radius=12, fill=fill_color, outline=outline_color, width=3)
                 draw.text((margins.margin_x + 24, curr_y + 16), f"Step {idx + 1}", fill=ColorPalette.ACCENT_GOLD if is_active else ColorPalette.TEXT_MUTED, font=f_step)
-                draw.text((margins.margin_x + 140, curr_y + 16), active_steps[idx][:64], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, active_steps[idx], (margins.margin_x + 140, curr_y + 16), f_body, ColorPalette.TEXT_PRIMARY, max_width=box_w - 164, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -343,12 +418,12 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             # Decision Diamond / Central Box
             top_box_y = margins.margin_top + 100
             draw.rounded_rectangle([margins.margin_x + 200, top_box_y, w - margins.margin_x - 200, top_box_y + 140], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_GOLD, width=3)
             draw.text((margins.margin_x + 240, top_box_y + 24), "CRITERIA / CONDITION TEST", fill=ColorPalette.ACCENT_GOLD, font=f_box)
-            draw.text((margins.margin_x + 240, top_box_y + 76), condition[:50], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+            self._draw_wrapped_text(draw, condition, (margins.margin_x + 240, top_box_y + 76), f_body, ColorPalette.TEXT_PRIMARY, max_width=w - margins.margin_x - 240 - margins.margin_x, max_lines=2)
 
             if step >= 2:
                 # Branches
@@ -357,14 +432,14 @@ class DocumentaryAnimationSuite:
                 # YES
                 draw.rounded_rectangle([margins.margin_x, b_y, margins.margin_x + half_w, b_y + 160], radius=14, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_EMERALD, width=3)
                 draw.text((margins.margin_x + 24, b_y + 20), "YES -> CONSEQUENCE", fill=ColorPalette.ACCENT_EMERALD, font=f_box)
-                draw.text((margins.margin_x + 24, b_y + 72), yes_branch[:44], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, yes_branch, (margins.margin_x + 24, b_y + 72), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 48, max_lines=2)
 
                 # NO
                 draw.rounded_rectangle([margins.margin_x + half_w + 60, b_y, w - margins.margin_x, b_y + 160], radius=14, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_ROSE, width=3)
                 draw.text((margins.margin_x + half_w + 84, b_y + 20), "NO -> EXCEPTION", fill=ColorPalette.ACCENT_ROSE, font=f_box)
-                draw.text((margins.margin_x + half_w + 84, b_y + 72), no_branch[:44], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, no_branch, (margins.margin_x + half_w + 84, b_y + 72), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 48, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -392,7 +467,9 @@ class DocumentaryAnimationSuite:
 
         if not institutions:
             raise ValueError("Institutional relationship rendering requires named, supplied institutions.")
-        items = institutions[:3]
+        if len(institutions) > 3:
+            raise ValueError("Institutional animation supports at most three nodes; split the diagram.")
+        items = institutions
         frames: list[Image.Image] = []
 
         for count in range(1, len(items) + 1):
@@ -403,7 +480,7 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             gap = int((w - 2 * margins.margin_x) / 3)
             box_w = gap - 30
             y_b = margins.margin_top + 160
@@ -412,10 +489,10 @@ class DocumentaryAnimationSuite:
                 lbl, role = items[idx]
                 color = ColorPalette.ACCENT_GOLD if idx == count - 1 else ColorPalette.ACCENT_SKY
                 draw.rounded_rectangle([b_x, y_b, b_x + box_w, y_b + 220], radius=16, fill=ColorPalette.SURFACE_CARD, outline=color, width=3)
-                draw.text((b_x + 20, y_b + 24), lbl[:20], fill=color, font=f_hdr)
-                draw.text((b_x + 20, y_b + 84), role[:36], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, lbl, (b_x + 20, y_b + 24), f_hdr, color, max_width=box_w - 40, max_lines=2)
+                self._draw_wrapped_text(draw, role, (b_x + 20, y_b + 84), f_body, ColorPalette.TEXT_PRIMARY, max_width=box_w - 40, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -443,7 +520,9 @@ class DocumentaryAnimationSuite:
 
         if len(territories) < 2:
             raise ValueError("Region-card rendering requires at least two supplied, sourced regions.")
-        items = territories[:8]
+        if len(territories) > 8:
+            raise ValueError("Region-card animation supports at most eight regions; split the sequence.")
+        items = territories
         frames: list[Image.Image] = []
 
         for count in range(1, len(items) + 1):
@@ -454,7 +533,7 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
 
             # Map highlight boxes
             for idx in range(count):
@@ -462,9 +541,9 @@ class DocumentaryAnimationSuite:
                 curr_y = margins.margin_top + 100 + idx * 130
                 draw.rounded_rectangle([margins.margin_x, curr_y, w - margins.margin_x, curr_y + 100], radius=12, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_SKY, width=2)
                 draw.text((margins.margin_x + 30, curr_y + 16), f"• {zone}", fill=ColorPalette.ACCENT_SKY, font=f_hdr)
-                draw.text((margins.margin_x + 340, curr_y + 20), desc[:48], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, desc, (margins.margin_x + 340, curr_y + 20), f_body, ColorPalette.TEXT_PRIMARY, max_width=w - margins.margin_x - 340 - margins.margin_x, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -501,22 +580,22 @@ class DocumentaryAnimationSuite:
             f_val = FontManager.get_font(56, bold=True)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             half_w = (w - 2 * margins.margin_x - 60) // 2
 
             # Left Stat
             draw.rounded_rectangle([margins.margin_x, margins.margin_top + 120, margins.margin_x + half_w, margins.margin_top + 460], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_GOLD, width=3)
-            draw.text((margins.margin_x + 40, margins.margin_top + 160), stat_a[0][:26], fill=ColorPalette.ACCENT_GOLD, font=f_hdr)
+            self._draw_wrapped_text(draw, stat_a[0], (margins.margin_x + 40, margins.margin_top + 160), f_hdr, ColorPalette.ACCENT_GOLD, max_width=half_w - 80, max_lines=2)
             draw.text((margins.margin_x + 40, margins.margin_top + 260), f"{stat_a[1]} {unit}", fill=ColorPalette.TEXT_PRIMARY, font=f_val)
 
             # Right Stat
             if step >= 2:
                 rx = margins.margin_x + half_w + 60
                 draw.rounded_rectangle([rx, margins.margin_top + 120, rx + half_w, margins.margin_top + 460], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_SKY, width=3)
-                draw.text((rx + 40, margins.margin_top + 160), stat_b[0][:26], fill=ColorPalette.ACCENT_SKY, font=f_hdr)
+                self._draw_wrapped_text(draw, stat_b[0], (rx + 40, margins.margin_top + 160), f_hdr, ColorPalette.ACCENT_SKY, max_width=half_w - 80, max_lines=2)
                 draw.text((rx + 40, margins.margin_top + 260), f"{stat_b[1]} {unit}", fill=ColorPalette.TEXT_PRIMARY, font=f_val)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -552,15 +631,17 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             half_w = (w - 2 * margins.margin_x - 60) // 2
 
             # BEFORE
             draw.rounded_rectangle([margins.margin_x, margins.margin_top + 100, margins.margin_x + half_w, h - margins.margin_bottom - 40], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_ROSE, width=3)
             draw.text((margins.margin_x + 30, margins.margin_top + 130), "PRE-REFORM STATUS", fill=ColorPalette.ACCENT_ROSE, font=f_hdr)
             y_pt = margins.margin_top + 200
-            for pt in before_points[:3]:
-                draw.text((margins.margin_x + 30, y_pt), f"• {pt[:40]}", fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+            if len(before_points) > 3:
+                raise ValueError("Before/after comparison supports at most three points per side; split the scene.")
+            for pt in before_points:
+                self._draw_wrapped_text(draw, f"• {pt}", (margins.margin_x + 30, y_pt), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 60, max_lines=2)
                 y_pt += 60
 
             # AFTER
@@ -569,11 +650,13 @@ class DocumentaryAnimationSuite:
                 draw.rounded_rectangle([rx, margins.margin_top + 100, rx + half_w, h - margins.margin_bottom - 40], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_EMERALD, width=3)
                 draw.text((rx + 30, margins.margin_top + 130), "POST-REFORM IMPACT", fill=ColorPalette.ACCENT_EMERALD, font=f_hdr)
                 y_pt = margins.margin_top + 200
-                for pt in after_points[:3]:
-                    draw.text((rx + 30, y_pt), f"• {pt[:40]}", fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                if len(after_points) > 3:
+                    raise ValueError("Before/after comparison supports at most three points per side; split the scene.")
+                for pt in after_points:
+                    self._draw_wrapped_text(draw, f"• {pt}", (rx + 30, y_pt), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 60, max_lines=2)
                     y_pt += 60
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -612,7 +695,7 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             gap = int((w - 2 * margins.margin_x) / 3)
             box_w = gap - 30
             y_b = margins.margin_top + 160
@@ -621,9 +704,9 @@ class DocumentaryAnimationSuite:
                 lbl, desc, col = stages[idx]
                 draw.rounded_rectangle([b_x, y_b, b_x + box_w, y_b + 220], radius=16, fill=ColorPalette.SURFACE_CARD, outline=col, width=3)
                 draw.text((b_x + 20, y_b + 24), lbl[:22], fill=col, font=f_hdr)
-                draw.text((b_x + 20, y_b + 84), desc[:38], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, desc, (b_x + 20, y_b + 84), f_body, ColorPalette.TEXT_PRIMARY, max_width=box_w - 40, max_lines=2)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
@@ -659,22 +742,22 @@ class DocumentaryAnimationSuite:
             f_body = FontManager.get_font(spec["body_size"], bold=False)
             f_meta = FontManager.get_font(spec["meta_size"], bold=False)
 
-            draw.text((margins.margin_x, margins.margin_top), title[:52], fill=ColorPalette.TEXT_PRIMARY, font=f_title)
+            self._draw_wrapped_text(draw, title, (margins.margin_x, margins.margin_top), f_title, ColorPalette.TEXT_PRIMARY, max_width=w - 2 * margins.margin_x, max_lines=2)
             half_w = (w - 2 * margins.margin_x - 60) // 2
 
             # Epoch A
             draw.rounded_rectangle([margins.margin_x, margins.margin_top + 120, margins.margin_x + half_w, margins.margin_top + 460], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_GOLD, width=3)
-            draw.text((margins.margin_x + 36, margins.margin_top + 160), epoch_a[0][:26], fill=ColorPalette.ACCENT_GOLD, font=f_hdr)
-            draw.text((margins.margin_x + 36, margins.margin_top + 240), epoch_a[1][:50], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+            self._draw_wrapped_text(draw, epoch_a[0], (margins.margin_x + 36, margins.margin_top + 160), f_hdr, ColorPalette.ACCENT_GOLD, max_width=half_w - 72, max_lines=2)
+            self._draw_wrapped_text(draw, epoch_a[1], (margins.margin_x + 36, margins.margin_top + 240), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 72, max_lines=3)
 
             # Epoch B
             if step >= 2:
                 rx = margins.margin_x + half_w + 60
                 draw.rounded_rectangle([rx, margins.margin_top + 120, rx + half_w, margins.margin_top + 460], radius=16, fill=ColorPalette.SURFACE_CARD, outline=ColorPalette.ACCENT_SKY, width=3)
-                draw.text((rx + 36, margins.margin_top + 160), epoch_b[0][:26], fill=ColorPalette.ACCENT_SKY, font=f_hdr)
-                draw.text((rx + 36, margins.margin_top + 240), epoch_b[1][:50], fill=ColorPalette.TEXT_PRIMARY, font=f_body)
+                self._draw_wrapped_text(draw, epoch_b[0], (rx + 36, margins.margin_top + 160), f_hdr, ColorPalette.ACCENT_SKY, max_width=half_w - 72, max_lines=2)
+                self._draw_wrapped_text(draw, epoch_b[1], (rx + 36, margins.margin_top + 240), f_body, ColorPalette.TEXT_PRIMARY, max_width=half_w - 72, max_lines=3)
 
-            draw.text((margins.margin_x, h - margins.margin_bottom + 10), f"Source: {source_citation}", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+            self._draw_source_footer(draw, source_citation, margins.margin_x, h - margins.margin_bottom + 10, w - 2 * margins.margin_x, f_meta)
             frames.append(img)
 
         self._render_frames_to_mp4(frames, out_mp4, duration_sec, orientation=orientation)
