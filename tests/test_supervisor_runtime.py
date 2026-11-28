@@ -165,7 +165,9 @@ def test_supervisor_does_not_retry_failed_non_idempotent_production(
 
     assert calls["count"] == 1
     assert result["workflow"]["status"] == "REVIEW_REQUIRED"
-    assert result["agent_states"]["AGENT_01"]["status"] == "FAILED"
+    # Runtime quarantines the failed production agent as BLOCKED after the
+    # non-idempotent workflow is marked REVIEW_REQUIRED; it must not be retried.
+    assert result["agent_states"]["AGENT_01"]["status"] == "BLOCKED"
     assert result["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     statuses = {
         row[0]: row[1]
