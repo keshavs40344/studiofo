@@ -491,7 +491,38 @@ class StagedChapterPipeline:
         for idx, scene in enumerate(scenes):
             vtype = str((scene.metadata or {}).get("visual_type") or "").upper()
             bullets = scene.on_screen_bullets or [scene.learning_objective or project.chapter_title]
-            citation = ", ".join(scene.source_citations[:3]) or "Source citation pending review"
+            # Resolve scene citations to actual external source titles and pinpoint references.
+            # Internal claim IDs are never rendered as if they were source citations.
+            citations: list[str] = []
+            for claim_id in scene.claim_ids:
+                source_row = self.conn.execute(
+                    """
+                    SELECT c.status, c.page_or_section, s.title, s.publisher, s.url, s.source_tier
+                    FROM claims AS c
+                    JOIN sources AS s ON s.id = c.source_id
+                    WHERE c.project_id = ? AND c.id = ?
+                    """,
+                    (project_id, claim_id),
+                ).fetchone()
+                if (
+                    source_row
+                    and source_row["status"] == "VERIFIED"
+                    and source_row["source_tier"] != "USER_NOTES"
+                    and source_row["url"]
+                    and str(source_row["url"]).strip()
+                ):
+                    citation_text = str(source_row["title"]).strip()
+                    if source_row["publisher"]:
+                        citation_text += f" — {str(source_row['publisher']).strip()}"
+                    if source_row["page_or_section"]:
+                        citation_text += f" — {str(source_row['page_or_section']).strip()}"
+                    if citation_text not in citations:
+                        citations.append(citation_text)
+            scene.source_citations = citations
+            scene.metadata["citation_status"] = (
+                "VERIFIED_EXTERNAL_SOURCE_LINKED" if citations else "SOURCE_REVIEW_REQUIRED"
+            )
+            citation = "; ".join(citations[:3]) if citations else "Source attribution pending review"
             clip_dur = min(10.0, max(5.0, float(scene.estimated_duration_sec)))
 
             if idx == 0:
@@ -500,75 +531,161 @@ class StagedChapterPipeline:
             elif vtype == "HISTORICAL_TIMELINE":
                 raw_events = (scene.metadata or {}).get("timeline_events")
                 events = (
-                    [item for item in raw_events if isinstance(item, dict)
-                     and str(item.get("date", "")).strip()
-                     and str(item.get("label", "")).strip()][:8]
+                    [
+                        (str(item["date"]).strip(), str(item["label"]).strip())
+                        for item in raw_events
+                        if isinstance(item, dict)
+                        and str(item.get("date", "")).strip()
+                        and str(item.get("label", "")).strip()
+                    ][:8]
                     if isinstance(raw_events, list) else []
                 )
                 if len(events) >= 2 and scene.source_citations:
                     asset = doc_anim.render_timeline_progression(
                         project_id, scene.scene_id, scene.section_title, events, citation, duration_sec=clip_dur
                     )
+                    scene.metadata["rendered_visual_kind"] = "TIMELINE"
                 else:
                     asset = doc_anim.render_process_demonstration(
                         project_id, scene.scene_id, scene.section_title, bullets[:4],
                         citation, duration_sec=clip_dur
                     )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_TIMELINE"
                     scene.metadata["visual_data_warning"] = (
-                        "Timeline animation withheld: at least two dated events and source citations are required."
+                        "Timeline requested but not rendered: at least two sourced dated events are required. "
+                        "This fallback is a draft only and blocks publication."
                     )
                 scene.primary_asset = str(asset)
             elif vtype == "GEOGRAPHICAL_MAP":
                 raw_regions = (scene.metadata or {}).get("map_regions")
                 regions = (
-                    [item for item in raw_regions if isinstance(item, dict)
-                     and str(item.get("name", "")).strip()
-                     and str(item.get("detail", "")).strip()][:8]
+                    [
+                        (str(item["name"]).strip(), str(item["detail"]).strip())
+                        for item in raw_regions
+                        if isinstance(item, dict)
+                        and str(item.get("name", "")).strip()
+                        and str(item.get("detail", "")).strip()
+                    ][:8]
                     if isinstance(raw_regions, list) else []
                 )
                 if len(regions) >= 2 and scene.source_citations:
                     asset = doc_anim.render_map_explanation(
                         project_id, scene.scene_id, scene.section_title, regions, citation, duration_sec=clip_dur
                     )
+                    # Current implementation is a region-card sequence, not a geographic map.
+                    scene.metadata["rendered_visual_kind"] = "REGION_CARDS_NOT_GEOGRAPHIC_MAP"
+                    scene.metadata["visual_data_warning"] = (
+                        "The current renderer produces labelled region cards, not a geographically accurate map. "
+                        "A sourced geometry/map renderer is required before publication."
+                    )
                 else:
                     asset = doc_anim.render_process_demonstration(
                         project_id, scene.scene_id, scene.section_title, bullets[:4],
                         citation, duration_sec=clip_dur
                     )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_MAP"
                     scene.metadata["visual_data_warning"] = (
-                        "Geographical map withheld: sourced map-region metadata is required."
+                        "Geographical map requested but no sourced map geometry was supplied. "
+                        "This fallback is a draft only and blocks publication."
                     )
                 scene.primary_asset = str(asset)
             elif vtype in {"SPLIT_COMPARISON", "BEFORE_AFTER"}:
                 mid = max(1, len(bullets) // 2)
                 asset = doc_anim.render_before_after_comparison(
                     project_id, scene.scene_id, scene.section_title,
-                    "Dimension A", bullets[:mid], "Dimension B", bullets[mid:] or bullets[:mid],
+                    bullets[:mid], bullets[mid:] or bullets[:mid],
                     citation, duration_sec=clip_dur,
                 )
+                scene.metadata["rendered_visual_kind"] = "BEFORE_AFTER_COMPARISON"
                 scene.primary_asset = str(asset)
             elif vtype == "CAUSE_AND_EFFECT":
-                mid = max(1, len(bullets) // 2)
-                asset = doc_anim.render_cause_and_effect(
-                    project_id, scene.scene_id, scene.section_title,
-                    bullets[:mid], bullets[mid:] or bullets[:mid], citation, duration_sec=clip_dur,
-                )
+                cause = str(scene.metadata.get("cause", "")).strip()
+                mechanism = str(scene.metadata.get("mechanism", "")).strip()
+                effect = str(scene.metadata.get("effect", "")).strip()
+                if cause and mechanism and effect and scene.source_citations:
+                    asset = doc_anim.render_cause_and_effect(
+                        project_id, scene.scene_id, scene.section_title,
+                        cause, mechanism, effect, citation, duration_sec=clip_dur,
+                    )
+                    scene.metadata["rendered_visual_kind"] = "CAUSE_EFFECT"
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_CAUSE_EFFECT"
+                    scene.metadata["visual_data_warning"] = (
+                        "Cause-effect visual requested but separately sourced cause, mechanism, and effect "
+                        "fields are required. This fallback is a draft only and blocks publication."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype == "INSTITUTIONAL_DIAGRAM":
-                nodes = [{"role": f"Element {i+1}", "detail": b[:65]} for i, b in enumerate(bullets[:4])]
-                asset = doc_anim.render_institutional_relationship(
-                    project_id, scene.scene_id, scene.section_title, nodes, citation, duration_sec=clip_dur
-                )
+                nodes: list[tuple[str, str]] = []
+                for bullet in bullets[:3]:
+                    role, separator, detail = bullet.partition(":")
+                    role = role.strip()
+                    detail = detail.strip()
+                    if not separator or not role:
+                        words = bullet.split()
+                        role = " ".join(words[:4]) if words else "Institution"
+                        detail = bullet
+                    nodes.append((role, detail or bullet))
+                if nodes and scene.source_citations:
+                    asset = doc_anim.render_institutional_relationship(
+                        project_id, scene.scene_id, scene.section_title, nodes, citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "INSTITUTIONAL_RELATIONSHIP_DIAGRAM"
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_INSTITUTIONAL_DIAGRAM"
+                    scene.metadata["visual_data_warning"] = (
+                        "Institutional relationship diagram requires named entities and linked evidence."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype in {"FLOWCHART", "STEP_BY_STEP_MECHANISM"}:
-                asset = doc_anim.render_flow_diagram(
-                    project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
-                )
+                condition = str(scene.metadata.get("flow_condition", "")).strip()
+                yes_branch = str(scene.metadata.get("flow_yes", "")).strip()
+                no_branch = str(scene.metadata.get("flow_no", "")).strip()
+                if condition and yes_branch and no_branch and scene.source_citations:
+                    asset = doc_anim.render_flow_diagram(
+                        project_id, scene.scene_id, scene.section_title,
+                        condition, yes_branch, no_branch, citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "FLOWCHART"
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_FLOWCHART"
+                    scene.metadata["visual_data_warning"] = (
+                        "Flowchart requested but sourced condition, yes-branch, and no-branch fields are missing. "
+                        "This fallback is a draft only and blocks publication."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype == "SCIENTIFIC_ILLUSTRATION":
-                asset = doc_anim.render_scientific_process(
-                    project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
-                )
+                inputs = str(scene.metadata.get("science_inputs", "")).strip()
+                transformation = str(scene.metadata.get("science_transformation", "")).strip()
+                outputs = str(scene.metadata.get("science_outputs", "")).strip()
+                if inputs and transformation and outputs and scene.source_citations:
+                    asset = doc_anim.render_scientific_process(
+                        project_id, scene.scene_id, scene.section_title,
+                        inputs, transformation, outputs, citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "SCIENTIFIC_PROCESS"
+                else:
+                    asset = doc_anim.render_process_demonstration(
+                        project_id, scene.scene_id, scene.section_title, bullets[:4],
+                        citation, duration_sec=clip_dur
+                    )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_SCIENTIFIC_PROCESS"
+                    scene.metadata["visual_data_warning"] = (
+                        "Scientific illustration requested but sourced input, transformation, and output fields "
+                        "are required. This fallback is a draft only and blocks publication."
+                    )
                 scene.primary_asset = str(asset)
             elif vtype in {"DATA_VISUALISATION", "STATISTICAL_COMPARISON"}:
                 raw_bars = (scene.metadata or {}).get("chart_data")
@@ -580,23 +697,38 @@ class StagedChapterPipeline:
                      and str(item.get("unit", "")).strip()][:8]
                     if isinstance(raw_bars, list) else []
                 )
-                if len(bars) >= 2 and scene.source_citations:
+                units = {str(item.get("unit", "")).strip() for item in bars}
+                if len(bars) >= 2 and len(units) == 1 and "" not in units and scene.source_citations:
+                    stat_a = (str(bars[0]["label"]), float(bars[0]["value"]))
+                    stat_b = (str(bars[1]["label"]), float(bars[1]["value"]))
+                    unit = next(iter(units))
                     asset = doc_anim.render_statistical_comparison(
-                        project_id, scene.scene_id, scene.section_title, bars, citation, duration_sec=clip_dur
+                        project_id, scene.scene_id, scene.section_title,
+                        stat_a, stat_b, unit, citation, duration_sec=clip_dur
                     )
+                    scene.metadata["rendered_visual_kind"] = "DATA_CHART"
                 else:
                     asset = doc_anim.render_process_demonstration(
                         project_id, scene.scene_id, scene.section_title, bullets[:4],
                         citation, duration_sec=clip_dur
                     )
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_FALLBACK_NOT_DATA_CHART"
                     scene.metadata["visual_data_warning"] = (
-                        "Statistical chart withheld: sourced numeric chart_data and citations are required."
+                        "Statistical chart requested but at least two numeric, labelled values with matching units "
+                        "and verified source citations are required. This fallback is a draft only and blocks publication."
                     )
                 scene.primary_asset = str(asset)
             else:
                 asset = doc_anim.render_process_demonstration(
                     project_id, scene.scene_id, scene.section_title, bullets[:4], citation, duration_sec=clip_dur
                 )
+                if vtype in {"PROCESS_ANIMATION", "PROCESS_DEMONSTRATION", "STEP_BY_STEP_MECHANISM"}:
+                    scene.metadata["rendered_visual_kind"] = "PROCESS_DEMONSTRATION"
+                else:
+                    scene.metadata["rendered_visual_kind"] = "GENERIC_PROCESS_FALLBACK"
+                    scene.metadata["visual_data_warning"] = (
+                        f"Requested visual type {vtype or 'UNKNOWN'} was not rendered by a matching specialist renderer."
+                    )
                 scene.primary_asset = str(asset)
 
         package = PublishingPackageBuilder(project_dir, rights).build_package(
