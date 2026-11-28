@@ -184,6 +184,8 @@ class GeoJSONMapRenderer:
 
         draw.rectangle([0, 0, self.WIDTH, 10], fill=ColorPalette.ACCENT_GOLD)
         draw.text((96, 62), "GEOGRAPHIC EXPLANATION  |  WGS84 / PLATE CARRÉE", fill=ColorPalette.ACCENT_SKY, font=f_meta)
+        if draw.textlength(title, font=f_title) > self.WIDTH - 192:
+            raise ValueError("Map title does not fit the title area; shorten the authored scene title.")
         draw.text((96, 100), title, fill=ColorPalette.TEXT_PRIMARY, font=f_title)
         draw.rounded_rectangle(
             [left - 18, top - 18, left + panel_w + 18, top + panel_h + 18],
@@ -215,6 +217,10 @@ class GeoJSONMapRenderer:
         for index, feature in enumerate(parsed[:12]):
             y = legend_y + 58 + index * 48
             color = self.PALETTE[index % len(self.PALETTE)]
+            if draw.textlength(feature["name"], font=f_body) > self.WIDTH - legend_x - 36:
+                raise ValueError(
+                    f"Map feature label {feature['name']!r} does not fit the legend; use a concise sourced display name."
+                )
             draw.ellipse([legend_x, y + 7, legend_x + 18, y + 25], fill=color)
             draw.text((legend_x + 32, y), feature["name"], fill=ColorPalette.TEXT_SECONDARY, font=f_body)
 
