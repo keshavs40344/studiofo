@@ -56,8 +56,8 @@ def test_permanent_failure_blocks_downstream_task():
         TaskSpec("a", "A", "bad"),
         TaskSpec("b", "B", "next", ("a",)),
     ])
-    assert result["status"] == "FAILED"
-    assert result["failed"] == 1
+    assert result["status"] == "REVIEW_REQUIRED"
+    assert result["review_required"] == 1
     assert result["blocked"] == 1
 
 
