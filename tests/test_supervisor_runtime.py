@@ -164,7 +164,7 @@ def test_supervisor_does_not_retry_failed_non_idempotent_production(
     )
 
     assert calls["count"] == 1
-    assert result["workflow"]["status"] == "FAILED"
+    assert result["workflow"]["status"] == "REVIEW_REQUIRED"
     assert result["agent_states"]["AGENT_01"]["status"] == "FAILED"
     assert result["agent_states"]["AGENT_02"]["status"] == "REGISTERED"
     statuses = {
