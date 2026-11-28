@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import textwrap
 from pathlib import Path
 from typing import Any, Iterator
 
@@ -112,8 +113,10 @@ class GeoJSONMapRenderer:
         features = geojson.get("features")
         if not isinstance(features, list) or not features:
             raise ValueError("GeoJSON FeatureCollection must contain at least one feature.")
-        if len(features) > 100:
-            raise ValueError("Map input exceeds 100 features; simplify it into topic-specific layers.")
+        if len(features) > 12:
+            raise ValueError("Map renderer supports at most 12 labelled features; split the map into topic-specific layers.")
+        if not str(reference_date or "").strip():
+            raise ValueError("A map reference date/version is required to establish the geographic data's time scope.")
 
         parsed: list[dict[str, Any]] = []
         all_points: list[tuple[float, float]] = []
@@ -129,17 +132,14 @@ class GeoJSONMapRenderer:
             if not feature_points:
                 raise ValueError(f"GeoJSON feature {index + 1} contains no usable coordinates.")
             all_points.extend(feature_points)
-            parsed.append(
-                {
-                    "name": str(
-                        properties.get("name")
-                        or properties.get("name_en")
-                        or properties.get("label")
-                        or f"Feature {index + 1}"
-                    ).strip(),
-                    "paths": paths,
-                }
-            )
+            feature_name = str(
+                properties.get("name") or properties.get("name_en") or properties.get("label") or ""
+            ).strip()
+            if not feature_name:
+                raise ValueError(
+                    f"GeoJSON feature {index + 1} needs a human-readable name for the map legend."
+                )
+            parsed.append({"name": feature_name, "paths": paths})
 
         longitudes = [point[0] for point in all_points]
         latitudes = [point[1] for point in all_points]
@@ -220,13 +220,15 @@ class GeoJSONMapRenderer:
 
         extent_text = f"Lon {min_lon:.3f}° to {max_lon:.3f}°  |  Lat {min_lat:.3f}° to {max_lat:.3f}°"
         draw.text((left, 914), extent_text, fill=ColorPalette.TEXT_MUTED, font=f_meta)
-        attribution = f"Source: {source_citation}"
-        if reference_date:
-            attribution += f"  |  Reference date: {reference_date}"
-        if draw.textlength(attribution, font=f_meta) > self.WIDTH - 2 * 96:
-            attribution = f"Source: {source_citation[:110]}"
-        draw.text((96, 950), attribution, fill=ColorPalette.TEXT_MUTED, font=f_meta)
-        draw.text((96, 990), "Projection: longitude/latitude plotted as Plate Carrée; not suitable for distance measurement.", fill=ColorPalette.TEXT_MUTED, font=f_meta)
+        attribution = f"Source: {source_citation}  |  Reference date: {reference_date}"
+        footer_lines = textwrap.wrap(attribution, width=125) or [attribution]
+        if len(footer_lines) > 2 or any(draw.textlength(line, font=f_meta) > self.WIDTH - 2 * 96 for line in footer_lines):
+            raise ValueError(
+                "Map source attribution does not fit the footer; use a concise source title and keep full provenance in the ledger."
+            )
+        for line_index, line in enumerate(footer_lines):
+            draw.text((96, 946 + line_index * 24), line, fill=ColorPalette.TEXT_MUTED, font=f_meta)
+        draw.text((96, 996), "Projection: longitude/latitude plotted as Plate Carrée; not suitable for distance measurement.", fill=ColorPalette.TEXT_MUTED, font=f_meta)
 
         image.save(output_path, format="PNG")
         self.rights_ledger.register_asset(
