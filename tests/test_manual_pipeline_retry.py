@@ -50,7 +50,7 @@ def test_manual_retry_preserves_successful_upstream_and_reopens_outer_workflow(t
     stage_handlers = {handler: _completed for handler in stage_order}
     stage_handlers["pipeline_academic"] = _fail
     stage_run = DependencyScheduler(store, stage_handlers).run(inner_id, stage_specs)
-    assert stage_run["status"] == "FAILED"
+    assert stage_run["status"] == "REVIEW_REQUIRED"
 
     outer_id = f"production:{project_id}:testfingerprint"
     outer_specs = [
