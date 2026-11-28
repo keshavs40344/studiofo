@@ -488,6 +488,12 @@ class StagedChapterPipeline:
         from upsc_studio.graphics.documentary_animations import DocumentaryAnimationSuite
         doc_anim = DocumentaryAnimationSuite(project_dir, rights)
 
+        specialised_visual_types = {
+            "HISTORICAL_TIMELINE", "GEOGRAPHICAL_MAP", "SPLIT_COMPARISON",
+            "BEFORE_AFTER", "CAUSE_AND_EFFECT", "INSTITUTIONAL_DIAGRAM",
+            "FLOWCHART", "STEP_BY_STEP_MECHANISM", "SCIENTIFIC_ILLUSTRATION",
+            "DATA_VISUALISATION", "STATISTICAL_COMPARISON",
+        }
         for idx, scene in enumerate(scenes):
             vtype = str((scene.metadata or {}).get("visual_type") or "").upper()
             bullets = scene.on_screen_bullets or [scene.learning_objective or project.chapter_title]
@@ -540,8 +546,9 @@ class StagedChapterPipeline:
             citation = "; ".join(citations[:3]) if citations else "Source attribution pending review"
             clip_dur = min(10.0, max(5.0, float(scene.estimated_duration_sec)))
 
-            if idx == 0:
+            if idx == 0 and vtype not in specialised_visual_types:
                 asset = graphics.generate_scene_graphic(project_id, project.chapter_title, scene)
+                scene.metadata["rendered_visual_kind"] = "TITLE_OR_CONCEPT_GRAPHIC"
                 scene.primary_asset = str(asset)
             elif vtype == "HISTORICAL_TIMELINE":
                 raw_events = (scene.metadata or {}).get("timeline_events")
